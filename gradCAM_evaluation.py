@@ -1,24 +1,16 @@
-# Perform gradCAM/torchCAM evaluation on ResNet-50 model trained on Animals-10 dataset
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from resnet50_animals10_model import ResNet50_Animals10
+from model_architecture import ResNet50_Animals10
 
 from torchcam.methods import GradCAM
 import cv2
 import random
 
-import argparse
-
-parser = argparse.ArgumentParser(description="Grad-CAM script")
-parser.add_argument("--model_path", type=str, required=True, help="Path to the trained model in the 'models' directory (.pth file)")
-args = parser.parse_args()
-# Example usage: python gradCAM_evaluation.py --model_path models/resnet50_animals10_0_9721_0_1134.pth
-
-MODEL_PATH = args.model_path
+MODEL_PATH = "models\Resnet50_animals10_val_0_9796_0_5963.pth"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 

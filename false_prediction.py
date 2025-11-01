@@ -18,7 +18,7 @@ import torch
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader
 
-from resnet50_animals10_model import ResNet50_Animals10
+from model_architecture import ResNet50_Animals10
 
 # Path to the model (can be relative). Edit if needed.
 MODEL_PATH = r"models\Resnet50_animals10_val_0_9796_0_5963.pth"
