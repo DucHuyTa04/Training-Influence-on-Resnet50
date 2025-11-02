@@ -217,7 +217,7 @@ class TracInResNet50:
     def _load_model(self) -> nn.Module:
         """Load trained ResNet50 model from checkpoint."""
         print("\nLoading model...")
-        model = ResNet50_Animals10(num_animal_classes=10, pretrained=False)
+        model = ResNet50_Animals10(num_animal_classes=10, pretrained=False, freeze_backbone=False)
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(f"Model not found at: {self.model_path}")
         
