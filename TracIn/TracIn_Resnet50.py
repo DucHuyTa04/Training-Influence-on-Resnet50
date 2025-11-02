@@ -413,7 +413,7 @@ def main():
     parser.add_argument(
         '--batch_size',
         type=int,
-        default=64,
+        default=32,
         help='Batch size for data loading'
     )
     
