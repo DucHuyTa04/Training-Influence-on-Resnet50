@@ -5,3 +5,4 @@ gradcam_figures/
 venv/
 logs/
 slurm-*.out
+PROJECT_STATUS.md
