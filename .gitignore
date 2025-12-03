@@ -6,3 +6,8 @@ venv/
 logs/
 slurm-*.out
 PROJECT_STATUS.md
+models/checkpoints/
+TracIn/top_influential/
+models/Resnet50_*.pth
+*.out
+*.err

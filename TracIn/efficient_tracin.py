@@ -105,15 +105,19 @@ def compute_influence_features_batch(
     inputs = inputs.to(device, non_blocking=True)
     labels = labels.to(device, non_blocking=True)
     
-    outputs = model(inputs)
-    loss = criterion(outputs, labels)
-    
     batch_features = []
     
-    for i in range(len(loss)):
+    for i in range(len(inputs)):
         model.zero_grad()
         hook.clear()
-        loss[i].backward(retain_graph=(i < len(loss) - 1))
+        
+        single_input = inputs[i:i+1]
+        single_label = labels[i:i+1]
+        
+        output = model(single_input)
+        loss = criterion(output, single_label)
+        loss.backward()
+        
         features = hook.get_influence_features()
         batch_features.append(features)
     
@@ -217,7 +221,7 @@ def compute_tracin_multi_checkpoint(
     print(f"Test samples: {num_test}")
     print(f"Checkpoints: {len(checkpoint_paths)}")
     
-    model = ResNet50_Animals10(num_classes=10, pretrained=False)
+    model = ResNet50_Animals10(num_animal_classes=10, pretrained=False)
     model = model.to(device)
     
     target_layer = model.model.fc
