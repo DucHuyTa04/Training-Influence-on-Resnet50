@@ -1,24 +1,40 @@
 import torch
 import torchvision
 import torch.nn as nn
+from pathlib import Path
 
-# Creating a custom class for transfer learning on Animals-10 dataset
 class ResNet50_Animals10(nn.Module):
     def __init__(self, num_animal_classes=10, pretrained=True, freeze_backbone=True):
         super(ResNet50_Animals10, self).__init__()
         
-        weights = torchvision.models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
-        self.model = torchvision.models.resnet50(weights=weights)
+        if pretrained:
+            # Load from local weights cache (downloaded by download_weights.py)
+            weights_cache = Path(__file__).parent / 'models' / 'weights_cache' / 'resnet50_imagenet1k_v1.pth'
+            if weights_cache.exists():
+                print(f"Loading ResNet50 ImageNet weights from: {weights_cache}")
+                self.model = torchvision.models.resnet50(weights=None)
+                state_dict = torch.load(str(weights_cache), map_location='cpu')
+                self.model.load_state_dict(state_dict)
+                print(f"Successfully loaded ImageNet pretrained weights")
+            else:
+                # Fallback: try to download from torchvision (requires internet)
+                try:
+                    print("Weights cache not found, attempting to download ImageNet weights...")
+                    self.model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1)
+                    print(f"Downloaded and loaded ImageNet weights")
+                except Exception as e:
+                    print(f"Could not load pretrained weights: {e}")
+                    print("Training with random initialization")
+                    self.model = torchvision.models.resnet50(weights=None)
+        else:
+            self.model = torchvision.models.resnet50(weights=None)
         
-        # Freeze backbone for initial training phase
         if freeze_backbone:
             for param in self.model.parameters():
                 param.requires_grad = False
         
-        # Get input features
         fc_in_features = self.model.fc.in_features
         
-        # Optimized classifier head for 10-class Animals dataset
         self.model.fc = nn.Sequential(
             nn.Linear(in_features=fc_in_features, out_features=512),
             nn.LeakyReLU(),
@@ -27,11 +43,8 @@ class ResNet50_Animals10(nn.Module):
             nn.Linear(in_features=256, out_features=num_animal_classes)
         )
 
-        # Ensuring that the newly added layers are not frozen, since we intend on fine-tuning them
         for param in self.model.fc.parameters():
             param.requires_grad = True
 
     def forward(self, x):
         return self.model(x)
-
-

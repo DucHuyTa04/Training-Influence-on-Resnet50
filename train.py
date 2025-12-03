@@ -1,5 +1,6 @@
 import os
 import argparse
+import json
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,7 +13,9 @@ from tqdm.auto import tqdm
 # Load the custom Resnet50 model for Animals10
 from model_architecture import ResNet50_Animals10
 
-def train_model(model, criterion, optimizer, scheduler, num_epochs, early_stopping_patience, save_model=True):
+def train_model(model, criterion, optimizer, scheduler, num_epochs, early_stopping_patience, 
+                save_model=True, save_checkpoints=True, checkpoint_freq=5, 
+                checkpoint_dir='models/checkpoints', stage_name='finetune'):
     since = time.time()
     
     # Enable mixed precision training if using CUDA
@@ -30,6 +33,12 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, early_stoppi
     }
     best_epoch = 0
     epochs_no_improve = 0
+    
+    checkpoint_metadata = []
+    if save_checkpoints:
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        print(f"\nCheckpoint saving enabled: Every {checkpoint_freq} epochs to {checkpoint_dir}/")
+    
     for epoch in range(num_epochs):
         print(f'\nEpoch {epoch+1}/{num_epochs}')
         print('-' * 60)
@@ -117,6 +126,23 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, early_stoppi
                     epochs_no_improve += 1
                     print(f'No improvement in val loss for {epochs_no_improve} epoch(s).')
 
+        if save_checkpoints and (epoch + 1) % checkpoint_freq == 0:
+            checkpoint_path = os.path.join(checkpoint_dir, f'{stage_name}_epoch_{epoch+1}.pth')
+            torch.save(model.state_dict(), checkpoint_path)
+            
+            current_lr = optimizer.param_groups[0]['lr']
+            
+            checkpoint_info = {
+                'epoch': epoch + 1,
+                'checkpoint_path': checkpoint_path,
+                'learning_rate': current_lr,
+                'val_loss': history['val_loss'][-1] if history['val_loss'] else None,
+                'val_acc': history['val_acc'][-1] if history['val_acc'] else None,
+                'stage': stage_name
+            }
+            checkpoint_metadata.append(checkpoint_info)
+            print(f'Checkpoint saved: {checkpoint_path} (lr={current_lr:.2e})')
+
         if epochs_no_improve >= early_stopping_patience:
             print(f'Early stopping triggered after {epoch+1} epochs. Best epoch: {best_epoch+1}')
             break
@@ -127,7 +153,6 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, early_stoppi
     
     model.load_state_dict(best_model_wts)
 
-    # Save best model only if requested (do not save after intermediate head-only stage)
     if save_model:
         os.makedirs("models", exist_ok=True)
         acc_str = f"{best_val_acc:.4f}".replace(".", "_")
@@ -135,6 +160,13 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, early_stoppi
         model_save_path = os.path.join("models", f"Resnet50_animals10_val_{acc_str}_{loss_str}.pth")
         torch.save(model.state_dict(), model_save_path)
         print(f'\nBest model saved to: {model_save_path}')
+    
+    if save_checkpoints and len(checkpoint_metadata) > 0:
+        metadata_path = os.path.join(checkpoint_dir, f'{stage_name}_checkpoints_metadata.json')
+        with open(metadata_path, 'w') as f:
+            json.dump(checkpoint_metadata, f, indent=2)
+        print(f'Checkpoint metadata saved to: {metadata_path}')
+        print(f'Total checkpoints saved: {len(checkpoint_metadata)}')
 
     try:
         pbar.close()
@@ -154,6 +186,8 @@ if __name__ == '__main__':
     parser.add_argument("-early_stopping_patience", type=int, default=10, dest="early_stopping_patience", help="Early stopping patience")
     parser.add_argument("-val_split", type=float, default=0.2, dest="val_split", help="Fraction of train data to use for validation (0-1)")
     parser.add_argument("-seed", type=int, default=30, dest="seed", help="Random seed for train/val split")
+    parser.add_argument("-checkpoint_freq", type=int, default=5, dest="checkpoint_freq", help="Save checkpoint every N epochs")
+    parser.add_argument("-no_checkpoints", action="store_true", dest="no_checkpoints", help="Disable checkpoint saving")
 
     args = parser.parse_args()
     num_epochs = args.num_epochs
@@ -163,6 +197,8 @@ if __name__ == '__main__':
     early_stopping_patience = args.early_stopping_patience
     val_split = args.val_split
     seed = args.seed
+    checkpoint_freq = args.checkpoint_freq
+    save_checkpoints = not args.no_checkpoints
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
@@ -243,7 +279,12 @@ if __name__ == '__main__':
     optimizer_head = optim.AdamW(head_params, lr=1e-3, weight_decay=1e-4)
     scheduler_head = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer_head, T_0=5, T_mult=1)
 
-    model, history = train_model(model, criterion, optimizer_head, scheduler_head, num_epochs=head_epochs, early_stopping_patience=early_stopping_patience, save_model=False)
+    model, history = train_model(model, criterion, optimizer_head, scheduler_head, 
+                                 num_epochs=head_epochs, 
+                                 early_stopping_patience=early_stopping_patience, 
+                                 save_model=False, 
+                                 save_checkpoints=False, 
+                                 stage_name='head_only')
 
     print(f"\n{'='*60}")
     print("STAGE 2: Fine-tuning entire model (backbone unfrozen)")
@@ -267,4 +308,11 @@ if __name__ == '__main__':
     steps_per_epoch = max(1, len(dataloaders['train']))
     scheduler_ft = OneCycleLR(optimizer_ft, max_lr=[5e-5, 2e-4], steps_per_epoch=steps_per_epoch, epochs=num_epochs, pct_start=0.3)
 
-    model, history = train_model(model, criterion, optimizer_ft, scheduler_ft, num_epochs=num_epochs, early_stopping_patience=early_stopping_patience)
+    model, history = train_model(model, criterion, optimizer_ft, scheduler_ft, 
+                                 num_epochs=num_epochs, 
+                                 early_stopping_patience=early_stopping_patience,
+                                 save_model=True,
+                                 save_checkpoints=save_checkpoints,
+                                 checkpoint_freq=checkpoint_freq,
+                                 checkpoint_dir='models/checkpoints',
+                                 stage_name='finetune')
