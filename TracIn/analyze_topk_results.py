@@ -34,7 +34,7 @@ class TopKAnalyzer:
         self.df = pd.read_csv(self.results_dir / 'top_k_influences.csv')
         
         self.num_test, self.k = self.values.shape
-        print(f"✓ Loaded {self.num_test} test samples × top-{self.k} influences")
+        print(f"Loaded {self.num_test} test samples x top-{self.k} influences")
         
         self._load_dataset_info()
     
@@ -61,7 +61,7 @@ class TopKAnalyzer:
             self.test_images.extend(images)
             self.test_labels.extend([class_idx] * len(images))
         
-        print(f"✓ Dataset: {len(self.train_images)} train, {len(self.test_images)} test, {len(self.class_names)} classes")
+        print(f"Dataset: {len(self.train_images)} train, {len(self.test_images)} test, {len(self.class_names)} classes")
     
     def print_overview(self):
         """Print overview statistics."""
@@ -185,7 +185,7 @@ class TopKAnalyzer:
         
         most_common_idx = int(train_counter.most_common(1)[0][0])
         if most_common_idx < len(self.train_images):
-            print(f"\n⭐ Most Frequent Training Sample: #{most_common_idx}")
+            print(f"\nMost Frequent Training Sample: #{most_common_idx}")
             print(f"   Class: {self.class_names[self.train_labels[most_common_idx]]}")
             print(f"   Path: {self.train_images[most_common_idx]}")
             print(f"   Appears in {train_counter[most_common_idx]}/{self.num_test * self.k} top-K slots")
@@ -253,7 +253,7 @@ class TopKAnalyzer:
                 train_idx = int(train_idx)
                 if train_idx < len(self.train_labels):
                     train_class = self.class_names[self.train_labels[train_idx]]
-                    same_class = "✓" if train_class == class_name else "✗"
+                    same_class = "" if train_class == class_name else "✗"
                     print(f"    {rank}. Train #{train_idx} ({train_class}) {same_class} - appears {count} times")
     
     def analyze_influence_decay(self):
@@ -341,7 +341,7 @@ class TopKAnalyzer:
             shutil.copy2(src_path, dst_path)
             print(f"  {rank:2d}. Train #{train_idx:4d} ({class_name:12s}) - min={min_inf:.6e}, avg={avg_inf:.6e}")
         
-        print(f"\n✓ Saved to: {output_path}")
+        print(f"\nSaved to: {output_path}")
         print(f"  - helpful/ : {top_n} most positively influential samples")
         print(f"  - harmful/ : {top_n} most negatively influential samples")
     
@@ -384,7 +384,7 @@ class TopKAnalyzer:
             
             f.write("\n" + "="*70 + "\n")
         
-        print(f"✓ Report saved to: {output_file}")
+        print(f"Report saved to: {output_file}")
     
     def create_overall_dashboard(self, output_file='TracIn/results/overall_dashboard.png'):
         """Create overall influence analysis dashboard."""
@@ -542,7 +542,7 @@ Max Influence: {most_inf_val:.6f}
         plt.savefig(output_file, dpi=150, bbox_inches='tight')
         plt.close()
         
-        print(f"✓ Overall dashboard saved to: {output_file}")
+        print(f"Overall dashboard saved to: {output_file}")
     
     def create_per_class_dashboards(self, output_dir='TracIn/results/per_class'):
         """Create per-class influence analysis dashboards."""
@@ -714,9 +714,9 @@ Most Influential:
             plt.savefig(output_file, dpi=150, bbox_inches='tight')
             plt.close()
             
-            print(f"  ✓ Saved: {output_file}")
+            print(f"  Saved: {output_file}")
         
-        print(f"\n✓ All per-class dashboards saved to: {output_path}")
+        print(f"\nAll per-class dashboards saved to: {output_path}")
 
 
 def main():
@@ -740,7 +740,7 @@ def main():
     analyzer.create_per_class_dashboards()
     
     print("\n" + "="*70)
-    print("✓ Analysis complete!")
+    print("Analysis complete!")
     print("="*70)
 
 

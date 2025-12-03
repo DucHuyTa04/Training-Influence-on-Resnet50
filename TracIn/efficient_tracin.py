@@ -302,7 +302,7 @@ def compute_tracin_multi_checkpoint(
     )
     results_df.to_csv(os.path.join(output_dir, 'top_k_influences.csv'), index=False)
     
-    print(f"✓ Results saved to {output_dir}")
+    print(f"Results saved to {output_dir}")
     print(f"  - top_k_influences_values.npy: shape {aggregated_values.shape}")
     print(f"  - top_k_influences_indices.npy: shape {aggregated_indices.shape}")
     print(f"  - top_k_influences.csv")
@@ -388,7 +388,7 @@ def main():
         test_subset=args.test_subset
     )
     
-    print("\n✓ TracIn computation complete!")
+    print("\nTracIn computation complete!")
 
 
 if __name__ == '__main__':

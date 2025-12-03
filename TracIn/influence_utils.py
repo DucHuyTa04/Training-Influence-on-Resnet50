@@ -1,7 +1,7 @@
 """
 Utility functions for efficient TracIn influence computation.
 
-Implements Ghost Dot-Product and Top-K selection as described in Lei's slides.
+Implements Ghost Dot-Product and Top-K selection.
 """
 
 import torch

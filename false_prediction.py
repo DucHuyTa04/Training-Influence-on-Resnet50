@@ -21,10 +21,11 @@ from torch.utils.data import DataLoader
 from model_architecture import ResNet50_Animals10
 
 # Path to the model (can be relative). Edit if needed.
-MODEL_PATH = r"models\Resnet50_animals10_val_0_9796_0_5963.pth"
+MODEL_PATH = "models/Resnet50_animals10_val_0_9785_0_6127.pth"
 
-# Device
+# Device - force GPU for speed
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 # Data transforms for model input (must match training)
 data_transform = transforms.Compose([
@@ -70,8 +71,8 @@ def collect_mispredictions(split):
         print(f"Warning: {split_dir} does not exist, skipping")
         return []
     dataset = datasets.ImageFolder(root=split_dir, transform=data_transform)
-    # Use num_workers=0 on Windows to avoid multiprocessing spawn issues
-    loader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=0)
+    # Use larger batch size and workers for speed on GPU/Linux
+    loader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers=4, pin_memory=True)
     mis = []
     sample_index = 0
     with torch.no_grad():
@@ -141,38 +142,7 @@ print(f"Saved mispredictions list to {csv_path}")
 out_dir = os.path.join(script_dir, 'false_predictions')
 os.makedirs(out_dir, exist_ok=True)
 
-# Function to display pages of mispredictions
-def show_mispredictions(mis_list, class_names, page_size=12):
-    if not mis_list:
-        print('No mispredictions to show.')
-        return
-    total = len(mis_list)
-    pages = (total + page_size - 1) // page_size
-    for p in range(pages):
-        start = p * page_size
-        end = min(start + page_size, total)
-        n = end - start
-        cols = min(4, n)
-        rows = (n + cols - 1) // cols
-        fig, axes = plt.subplots(rows, cols, figsize=(4*cols, 3*rows))
-        axes = np.array(axes).reshape(-1)
-        for i, idx in enumerate(range(start, end)):
-            entry = mis_list[idx]
-            img = Image.open(entry['path']).convert('RGB')
-            axes[i].imshow(img)
-            axes[i].axis('off')
-            true_name = class_names[entry['true']] if entry['true'] < len(class_names) else str(entry['true'])
-            pred_name = class_names[entry['pred']] if entry['pred'] < len(class_names) else str(entry['pred'])
-            axes[i].set_title(f"True: {true_name}\nPred: {pred_name}\n{os.path.basename(entry['path'])}", fontsize=9)
-        # hide remaining axes
-        for j in range(n, len(axes)):
-            axes[j].axis('off')
-        plt.tight_layout()
-        # Save page to file instead of showing to avoid blocking the script
-        page_file = os.path.join(out_dir, f'page_{p+1}.png')
-        fig.savefig(page_file)
-        plt.close(fig)
-        print(f"Saved misprediction page: {page_file}")
+# Function to create combined mispredictions image
 def save_all_mispredictions_png(mis_list, class_names, out_path, thumb_size=(224,224), cols=6, max_images=None, label_height=30, pad=10):
     """Create a single PNG that contains all mispredicted images in a grid with labels.
     Caps at max_images if provided to avoid extremely large files.
@@ -229,10 +199,8 @@ if os.path.isdir(train_root):
 else:
     class_names = [str(i) for i in range(10)]
 
-# Show mispredictions
-show_mispredictions(mis_all, class_names, page_size=12)
-
-# Also create a single combined PNG (capped to avoid extremely large files)
+# Create a single combined PNG (capped to avoid extremely large files)
+print("\nGenerating combined mispredictions visualization...")
 combined_path = os.path.join(out_dir, 'combined_mispredictions.png')
 if len(mis_all) == 0:
     print('No mispredictions to save as combined image.')
