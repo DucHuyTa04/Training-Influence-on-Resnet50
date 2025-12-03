@@ -1,40 +1,66 @@
-# TracIn Implementation for ResNet50 Animals-10
+# Efficient TracIn with Ghost Dot-Product
 
-Implementation of **TracIn (Tracing Influence)** for analyzing training data influence on the ResNet50 Animals-10 model.
+**New implementation** based on professor's requirements and Lei's optimization techniques.
 
-**Paper**: [Estimating Training Data Influence by Tracing Gradient Descent](https://arxiv.org/abs/2002.08484)
+## Key Features
 
-## What is TracIn?
+**Ghost Dot-Product**: Compute influences using activation/error signals instead of full gradients  
+**Top-K Selection**: Keep only K most influential samples per test point (massive memory savings)  
+**Multi-Checkpoint**: Aggregate influences across multiple training checkpoints  
+**Tile-and-Stitch**: Process large datasets in chunks to avoid OOM  
+**GPU Optimized**: Runs efficiently on NVIDIA H100  
 
-TracIn quantifies how much each training sample influences model predictions by computing gradient similarity. This helps:
-- Find **helpful training samples** (positive influence)
-- Identify **harmful training samples** (negative influence - potentially mislabeled)
-- Debug predictions and improve dataset quality
+**Memory Improvement**: Instead of 26k × 2.6k matrix (676M values), we get 2.6k × 100 (260k values) → **2600x reduction!**
 
 ---
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Train Model with Checkpoints
 ```bash
-pip install torch torchvision numpy pandas matplotlib seaborn tqdm pillow
+# First, train a model that saves checkpoints
+sbatch slurm_train_full.sh  # 30 epochs, saves every 5 epochs
 ```
 
-### 2. Compute Influence Scores
+### 2. Test TracIn on Small Subset
 ```bash
-# Quick test (1-2 min)
-python TracIn_Resnet50.py --train_subset 100 --test_subset 10
-
-# Recommended (5-10 min)
-python TracIn_Resnet50.py --train_subset 500 --test_subset 50
-
-# Full dataset (several hours)
-python TracIn_Resnet50.py
+# Quick test (~2 min on login node)
+bash test_tracin.sh
 ```
 
-### 3. Analyze Results
+### 3. Run Full TracIn Analysis
 ```bash
-python analyze_results.py
+# After checkpoints are ready
+python TracIn/efficient_tracin.py --top_k 100
+```
+
+---
+
+## Command-Line Options
+
+```bash
+python TracIn/efficient_tracin.py [OPTIONS]
+
+Options:
+  --data_dir PATH           Data directory (default: data/processed)
+  --checkpoint_dir PATH     Checkpoint directory (default: models/checkpoints)
+  --output_dir PATH         Output directory (default: TracIn/results)
+  --top_k INT               Top influences per test sample (default: 100)
+  --batch_size INT          Batch size (default: 32)
+  --train_subset INT        Limit train samples (default: None = all)
+  --test_subset INT         Limit test samples (default: None = all)
+```
+
+**Examples**:
+```bash
+# Small test
+python TracIn/efficient_tracin.py --train_subset 100 --test_subset 10 --top_k 20
+
+# Medium analysis
+python TracIn/efficient_tracin.py --train_subset 1000 --test_subset 100 --top_k 50
+
+# Full dataset with top-100
+python TracIn/efficient_tracin.py --top_k 100
 ```
 
 ---
@@ -43,11 +69,9 @@ python analyze_results.py
 
 | File | Description |
 |------|-------------|
-| `results/analysis_dashboard.png` | **Main visualization** - overview, distributions, top samples |
-| `results/top_influences/{class}/` | **Top 10 helpful/harmful images** per class |
-| `results/{class}_summary.png` | Per-class detailed analysis |
-| `results/influence_scores.csv` | Raw influence matrix for custom analysis |
-| `results/influence_summary.csv` | Per-test summary statistics |
+| `results/top_k_influences_values.npy` | Influence scores [num_test, k] |
+| `results/top_k_influences_indices.npy` | Train sample indices [num_test, k] |
+| `results/top_k_influences.csv` | Human-readable CSV format |
 
 ---
 
