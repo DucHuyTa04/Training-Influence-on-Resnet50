@@ -133,97 +133,26 @@ class TopInfluenceInspector:
         plt.close()
     
     def print_influence_report(self, helpful_df, harmful_df):
-        """Print detailed influence report."""
-        print("\n" + "="*80)
-        print("TOP INFLUENTIAL IMAGES REPORT")
-        print("="*80)
-        
-        # Overall statistics
+        """Print brief influence summary."""
         all_values = self.values.flatten()
-        print(f"\nOverall Statistics:")
-        print(f"  Total influence scores: {len(all_values):,}")
-        print(f"  Mean influence: {all_values.mean():.6e}")
-        print(f"  Std influence: {all_values.std():.6e}")
-        print(f"  Max influence: {all_values.max():.6e}")
-        print(f"  Min influence: {all_values.min():.6e}")
-        
-        # Positive vs negative
-        positive = all_values[all_values >= 0]
         negative = all_values[all_values < 0]
         
-        print(f"\nInfluence Distribution:")
-        print(f"  Positive influences: {len(positive):,} ({100*len(positive)/len(all_values):.2f}%)")
-        print(f"  Negative influences: {len(negative):,} ({100*len(negative)/len(all_values):.2f}%)")
-        
         if len(negative) > 0:
-            print(f"  ⚠️  WARNING: Negative influences detected (potential harmful data)")
-        else:
-            print(f"  ✓ No negative influences (clean dataset)")
+            print(f"[WARN] {len(negative):,} negative influences detected")
         
-        # Top helpful images
-        print("\n" + "-"*80)
-        print("TOP HELPFUL IMAGES (Highest Positive Influence)")
-        print("-"*80)
-        
-        for idx, row in helpful_df.head(10).iterrows():
-            print(f"\n#{idx+1}. Train {row['train_idx']}: {row['image_path'].name}")
-            print(f"   Class: {row['class_name']}")
-            print(f"   Appearances: {row['appearance_count']}")
-            print(f"   Max influence: {row['max_influence']:.6e}")
-            print(f"   Mean influence: {row['mean_influence']:.6e}")
-            print(f"   Impact: Appears in {100*row['appearance_count']/self.values.shape[0]:.1f}% of test samples")
-        
-        # Top harmful/least helpful images
-        print("\n" + "-"*80)
-        print("LEAST INFLUENTIAL IMAGES (Lowest Influence)")
-        print("-"*80)
-        
-        for idx, row in harmful_df.head(10).iterrows():
-            print(f"\n#{idx+1}. Train {row['train_idx']}: {row['image_path'].name}")
-            print(f"   Class: {row['class_name']}")
-            print(f"   Appearances: {row['appearance_count']}")
-            print(f"   Min influence: {row['min_influence']:.6e}")
-            print(f"   Mean influence: {row['mean_influence']:.6e}")
-        
-        print("\n" + "="*80)
+        print(f"[INFO] Top helpful: Train {helpful_df.iloc[0]['train_idx']} (max inf: {helpful_df.iloc[0]['max_influence']:.2e})")
+        print(f"[INFO] Top harmful: Train {harmful_df.iloc[0]['train_idx']} (min inf: {harmful_df.iloc[0]['min_influence']:.2e})")
     
     def analyze_per_class_influences(self):
-        """Analyze influence distribution per class."""
-        stats_df = self.analyze_global_influences()
-        
-        print("\n" + "="*80)
-        print("PER-CLASS INFLUENCE ANALYSIS")
-        print("="*80 + "\n")
-        
-        for class_idx, class_name in enumerate(self.class_names):
-            class_data = stats_df[stats_df['label'] == class_idx]
+        """Analyze influence distribution per class (saved to visualizations)."""
+        # Per-class stats are in the image visualizations
+        pass
             
-            if len(class_data) == 0:
-                continue
-            
-            print(f"\n{class_name.upper()}:")
-            print(f"  Images in top-K: {len(class_data)}")
-            print(f"  Total appearances: {class_data['appearance_count'].sum()}")
-            print(f"  Avg appearances per image: {class_data['appearance_count'].mean():.1f}")
-            print(f"  Max influence: {class_data['max_influence'].max():.6e}")
-            print(f"  Mean influence: {class_data['mean_influence'].mean():.6e}")
-            
-            # Top 3 most influential images in this class
-            top_3 = class_data.nlargest(3, 'max_influence')
-            print(f"  Top 3 images:")
-            for _, row in top_3.iterrows():
-                print(f"    - {row['image_path'].name}: {row['max_influence']:.2e} "
-                      f"({row['appearance_count']} appearances)")
-        
-        print("\n" + "="*80)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Inspect top influential training images')
     parser.add_argument('--top_n', type=int, default=20, help='Number of top images to show')
-    parser.add_argument('--helpful_only', action='store_true', help='Only show helpful images')
-    parser.add_argument('--harmful_only', action='store_true', help='Only show harmful/least influential images')
-    parser.add_argument('--show_per_class', action='store_true', help='Show per-class analysis')
     parser.add_argument('--output_helpful', type=str, default='outputs/inspection/top_helpful_images.png',
                        help='Output path for helpful images')
     parser.add_argument('--output_harmful', type=str, default='outputs/inspection/top_harmful_images.png',
@@ -231,46 +160,32 @@ def main():
     
     args = parser.parse_args()
     
-    print("="*80)
-    print("TOP INFLUENTIAL IMAGES INSPECTOR")
-    print("="*80 + "\n")
+    print("[INFO] Analyzing top influential training images...")
     
-    # Initialize inspector
     inspector = TopInfluenceInspector()
-    
-    # Get top helpful images
     helpful_df = inspector.get_top_helpful(n=args.top_n)
-    
-    # Get top harmful images
     harmful_df = inspector.get_top_harmful(n=args.top_n)
     
-    # Print report
     inspector.print_influence_report(helpful_df, harmful_df)
     
-    # Per-class analysis
-    if args.show_per_class:
-        inspector.analyze_per_class_influences()
+    print(f"[INFO] Generating visualizations...")
+    inspector.visualize_influences(
+        helpful_df,
+        f'Top {args.top_n} Most Helpful Training Images\n(Highest Positive Influence)',
+        args.output_helpful,
+        metric='max_influence'
+    )
     
-    # Visualize
-    if not args.harmful_only:
-        inspector.visualize_influences(
-            helpful_df,
-            f'Top {args.top_n} Most Helpful Training Images\n(Highest Positive Influence)',
-            args.output_helpful,
-            metric='max_influence'
-        )
+    inspector.visualize_influences(
+        harmful_df,
+        f'Top {args.top_n} Least Influential Training Images\n(Lowest Influence)',
+        args.output_harmful,
+        metric='min_influence'
+    )
     
-    if not args.helpful_only:
-        inspector.visualize_influences(
-            harmful_df,
-            f'Top {args.top_n} Least Influential Training Images\n(Lowest Influence)',
-            args.output_harmful,
-            metric='min_influence'
-        )
-    
-    print("\n" + "="*80)
-    print("INSPECTION COMPLETE")
-    print("="*80)
+    print(f"\n[DONE] Outputs saved:")
+    print(f"       - {args.output_helpful}")
+    print(f"       - {args.output_harmful}")
 
 
 if __name__ == '__main__':

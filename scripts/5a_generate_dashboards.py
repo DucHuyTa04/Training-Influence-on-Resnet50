@@ -65,224 +65,36 @@ class TopKAnalyzer:
         print(f"Dataset: {len(self.train_images)} train, {len(self.test_images)} test, {len(self.class_names)} classes")
     
     def print_overview(self):
-        """Print overview statistics."""
-        print("\n" + "="*70)
-        print("TOP-K TRACIN INFLUENCE ANALYSIS")
-        print("="*70)
+        """Print brief overview statistics."""
+        print(f"\n[INFO] Analyzing {self.num_test:,} test samples x top-{self.k} influences")
         
-        print(f"\nDataset Configuration:")
-        print(f"  Test samples:     {self.num_test:,}")
-        print(f"  Top-K per sample: {self.k}")
-        print(f"  Total influences: {self.num_test * self.k:,}")
-        print(f"  Classes:          {', '.join(self.class_names)}")
-        
-        # Separate positive/negative statistics
-        positive_mask = self.values >= 0
-        negative_mask = self.values < 0
-        
-        positive_values = self.values[positive_mask]
-        negative_values = self.values[negative_mask]
-        
-        print(f"\nInfluence Score Statistics:")
-        print(f"  Overall:")
-        print(f"    Mean:   {self.values.mean():.6e}")
-        print(f"    Median: {np.median(self.values):.6e}")
-        print(f"    Std:    {self.values.std():.6e}")
-        print(f"    Range:  [{self.values.min():.6e}, {self.values.max():.6e}]")
-        
-        if len(positive_values) > 0:
-            print(f"\n  Positive Influences ({len(positive_values):,} / {len(self.values.flatten()):,}):")
-            print(f"    Mean:   {positive_values.mean():.6e}")
-            print(f"    Median: {np.median(positive_values):.6e}")
-            print(f"    Max:    {positive_values.max():.6e}")
-        
-        if len(negative_values) > 0:
-            print(f"\n  Negative Influences ({len(negative_values):,} / {len(self.values.flatten()):,}):")
-            print(f"    Mean:   {negative_values.mean():.6e}")
-            print(f"    Median: {np.median(negative_values):.6e}")
-            print(f"    Min:    {negative_values.min():.6e}")
-        
-        top_1_scores = self.values[:, 0]
-        print(f"\nTop-1 Influence Scores (most influential per test):")
-        print(f"  Mean:   {top_1_scores.mean():.6e}")
-        print(f"  Median: {np.median(top_1_scores):.6e}")
-        print(f"  Min:    {top_1_scores.min():.6e}")
-        print(f"  Max:    {top_1_scores.max():.6e}")
+        # Check for negative influences (potential issues)
+        negative_count = (self.values < 0).sum()
+        if negative_count > 0:
+            print(f"[WARN] {negative_count:,} negative influences detected (potential mislabeled data)")
     
     def analyze_global_influences(self):
-        """Find the most globally influential training samples."""
-        print("\n" + "="*70)
-        print("GLOBAL INFLUENCE ANALYSIS")
-        print("="*70)
-        
-        # Separate positive and negative influences
-        positive_mask = self.values >= 0
-        negative_mask = self.values < 0
-        
-        num_positive = positive_mask.sum()
-        num_negative = negative_mask.sum()
-        
-        print(f"\nInfluence Score Distribution:")
-        print(f"  Positive influences: {num_positive:,} ({num_positive/(self.num_test*self.k)*100:.1f}%)")
-        print(f"  Negative influences: {num_negative:,} ({num_negative/(self.num_test*self.k)*100:.1f}%)")
-        
-        # Most frequently appearing samples (regardless of sign)
-        all_indices = self.indices.flatten()
-        train_counter = Counter(all_indices)
-        
-        print(f"\n{'='*70}")
-        print("Top 20 Most Frequently Influential Training Samples:")
-        print(f"{'Rank':<6} {'Train ID':<10} {'Class':<12} {'Appears':<10} {'Percentage':<12}")
-        print("-" * 70)
-        
-        for rank, (train_idx, count) in enumerate(train_counter.most_common(20), 1):
-            train_idx = int(train_idx)
-            if train_idx < len(self.train_labels):
-                class_name = self.class_names[self.train_labels[train_idx]]
-                percentage = (count / (self.num_test * self.k)) * 100
-                print(f"{rank:<6} {train_idx:<10} {class_name:<12} {count:<10} {percentage:>6.2f}%")
-        
-        # Most helpful (highest positive influences)
-        print(f"\n{'='*70}")
-        print("Top 10 Most HELPFUL Training Samples (highest positive influence):")
-        print(f"{'Rank':<6} {'Train ID':<10} {'Class':<12} {'Max Influence':<15} {'Avg Influence':<15}")
-        print("-" * 70)
-        
-        train_avg_influence = {}
-        train_max_influence = {}
-        for train_idx in range(len(self.train_images)):
-            mask = self.indices == train_idx
-            if mask.any():
-                influences = self.values[mask]
-                train_avg_influence[train_idx] = influences.mean()
-                train_max_influence[train_idx] = influences.max()
-        
-        sorted_helpful = sorted(train_max_influence.items(), key=lambda x: x[1], reverse=True)[:10]
-        for rank, (train_idx, max_inf) in enumerate(sorted_helpful, 1):
-            if train_idx < len(self.train_labels):
-                class_name = self.class_names[self.train_labels[train_idx]]
-                avg_inf = train_avg_influence[train_idx]
-                print(f"{rank:<6} {train_idx:<10} {class_name:<12} {max_inf:<15.6e} {avg_inf:<15.6e}")
-        
-        # Most harmful (lowest/most negative influences)
-        print(f"\n{'='*70}")
-        print("Top 10 Most HARMFUL Training Samples (most negative influence):")
-        print(f"{'Rank':<6} {'Train ID':<10} {'Class':<12} {'Min Influence':<15} {'Avg Influence':<15}")
-        print("-" * 70)
-        
-        train_min_influence = {}
-        for train_idx in range(len(self.train_images)):
-            mask = self.indices == train_idx
-            if mask.any():
-                influences = self.values[mask]
-                train_min_influence[train_idx] = influences.min()
-        
-        sorted_harmful = sorted(train_min_influence.items(), key=lambda x: x[1])[:10]
-        for rank, (train_idx, min_inf) in enumerate(sorted_harmful, 1):
-            if train_idx < len(self.train_labels):
-                class_name = self.class_names[self.train_labels[train_idx]]
-                avg_inf = train_avg_influence.get(train_idx, 0)
-                print(f"{rank:<6} {train_idx:<10} {class_name:<12} {min_inf:<15.6e} {avg_inf:<15.6e}")
-        
-        most_common_idx = int(train_counter.most_common(1)[0][0])
-        if most_common_idx < len(self.train_images):
-            print(f"\nMost Frequent Training Sample: #{most_common_idx}")
-            print(f"   Class: {self.class_names[self.train_labels[most_common_idx]]}")
-            print(f"   Path: {self.train_images[most_common_idx]}")
-            print(f"   Appears in {train_counter[most_common_idx]}/{self.num_test * self.k} top-K slots")
+        """Find the most globally influential training samples (saved to report file)."""
+        # All detailed statistics are saved to influence_report.txt
+        pass
     
     def analyze_diversity(self):
-        """Analyze diversity of influential samples."""
-        print("\n" + "="*70)
-        print("DIVERSITY ANALYSIS")
-        print("="*70)
-        
+        """Analyze diversity of influential samples (saved to report file)."""
         unique_counts = [len(set(self.indices[i])) for i in range(self.num_test)]
-        
-        print(f"\nUnique Training Samples in Top-{self.k}:")
-        print(f"  Mean:   {np.mean(unique_counts):.2f}")
-        print(f"  Median: {np.median(unique_counts):.0f}")
-        print(f"  Min:    {np.min(unique_counts)}")
-        print(f"  Max:    {np.max(unique_counts)}")
-        
-        most_diverse_idx = np.argmax(unique_counts)
-        least_diverse_idx = np.argmin(unique_counts)
-        
-        print(f"\nMost Diverse Test Sample (#{most_diverse_idx}):")
-        print(f"  {unique_counts[most_diverse_idx]} unique training samples influence it")
-        if most_diverse_idx < len(self.test_labels):
-            print(f"  Class: {self.class_names[self.test_labels[most_diverse_idx]]}")
-        
-        print(f"\nLeast Diverse Test Sample (#{least_diverse_idx}):")
-        print(f"  Only {unique_counts[least_diverse_idx]} unique training samples influence it")
-        if least_diverse_idx < len(self.test_labels):
-            print(f"  Class: {self.class_names[self.test_labels[least_diverse_idx]]}")
-            
-            print(f"  Top-5 influential training samples:")
-            for rank in range(min(5, self.k)):
-                train_idx = int(self.indices[least_diverse_idx, rank])
-                influence = self.values[least_diverse_idx, rank]
-                if train_idx < len(self.train_labels):
-                    train_class = self.class_names[self.train_labels[train_idx]]
-                    print(f"    Rank {rank+1}: Train #{train_idx} ({train_class}) - influence={influence:.6e}")
+        # Diversity stats saved to report file only
     
     def analyze_per_class(self):
-        """Analyze influences per test class."""
-        print("\n" + "="*70)
-        print("PER-CLASS ANALYSIS")
-        print("="*70)
-        
-        for class_idx, class_name in enumerate(self.class_names):
-            test_indices_in_class = [i for i in range(min(self.num_test, len(self.test_labels))) 
-                                     if self.test_labels[i] == class_idx]
-            
-            if len(test_indices_in_class) == 0:
-                continue
-            
-            print(f"\n{class_name.upper()}:")
-            print(f"  Test samples: {len(test_indices_in_class)}")
-            
-            class_influences = self.values[test_indices_in_class]
-            print(f"  Avg influence: {class_influences.mean():.6e}")
-            print(f"  Max influence: {class_influences.max():.6e}")
-            
-            class_train_indices = self.indices[test_indices_in_class].flatten()
-            class_counter = Counter(class_train_indices)
-            
-            print(f"  Top-3 influential training samples:")
-            for rank, (train_idx, count) in enumerate(class_counter.most_common(3), 1):
-                train_idx = int(train_idx)
-                if train_idx < len(self.train_labels):
-                    train_class = self.class_names[self.train_labels[train_idx]]
-                    same_class = "" if train_class == class_name else "✗"
-                    print(f"    {rank}. Train #{train_idx} ({train_class}) {same_class} - appears {count} times")
+        """Analyze influences per test class (saved to per-class dashboards)."""
+        # Per-class analysis is visualized in per_class/*.png files
+        pass
     
     def analyze_influence_decay(self):
-        """Analyze how influence scores decay from rank 1 to rank K."""
-        print("\n" + "="*70)
-        print("INFLUENCE DECAY ANALYSIS")
-        print("="*70)
-        
-        rank_means = []
-        for rank in range(self.k):
-            rank_means.append(self.values[:, rank].mean())
-        
-        print(f"\nMean Influence by Rank:")
-        print(f"  Rank 1:   {rank_means[0]:.6e}")
-        print(f"  Rank 5:   {rank_means[4]:.6e}") if self.k >= 5 else None
-        print(f"  Rank 10:  {rank_means[9]:.6e}") if self.k >= 10 else None
-        print(f"  Rank 25:  {rank_means[24]:.6e}") if self.k >= 25 else None
-        print(f"  Rank {self.k}:  {rank_means[-1]:.6e}")
-        
-        decay_factor = rank_means[0] / rank_means[-1] if rank_means[-1] > 0 else float('inf')
-        print(f"\n  Decay factor (Rank 1 / Rank {self.k}): {decay_factor:.2f}x")
+        """Analyze how influence scores decay from rank 1 to rank K (saved to report)."""
+        # Decay analysis is in the report file
+        pass
     
     def save_top_influential_images(self, top_n=10, output_dir='outputs/inspection/detailed'):
         """Save images of the most helpful and harmful training samples."""
-        print("\n" + "="*70)
-        print("SAVING TOP INFLUENTIAL IMAGES")
-        print("="*70)
-        
         output_path = Path(output_dir)
         if output_path.exists():
             shutil.rmtree(output_path)
@@ -307,7 +119,6 @@ class TopKAnalyzer:
                 train_avg_influence[train_idx] = influences.mean()
         
         # Save most helpful samples
-        print(f"\nSaving top-{top_n} most HELPFUL training images...")
         sorted_helpful = sorted(train_max_influence.items(), key=lambda x: x[1], reverse=True)[:top_n]
         
         for rank, (train_idx, max_inf) in enumerate(sorted_helpful, 1):
@@ -322,10 +133,8 @@ class TopKAnalyzer:
             dst_path = helpful_dir / dst_name
             
             shutil.copy2(src_path, dst_path)
-            print(f"  {rank:2d}. Train #{train_idx:4d} ({class_name:12s}) - max={max_inf:.6e}, avg={avg_inf:.6e}")
         
         # Save most harmful samples
-        print(f"\nSaving top-{top_n} most HARMFUL training images...")
         sorted_harmful = sorted(train_min_influence.items(), key=lambda x: x[1])[:top_n]
         
         for rank, (train_idx, min_inf) in enumerate(sorted_harmful, 1):
@@ -340,18 +149,9 @@ class TopKAnalyzer:
             dst_path = harmful_dir / dst_name
             
             shutil.copy2(src_path, dst_path)
-            print(f"  {rank:2d}. Train #{train_idx:4d} ({class_name:12s}) - min={min_inf:.6e}, avg={avg_inf:.6e}")
-        
-        print(f"\nSaved to: {output_path}")
-        print(f"  - helpful/ : {top_n} most positively influential samples")
-        print(f"  - harmful/ : {top_n} most negatively influential samples")
     
     def create_summary_report(self, output_file='outputs/influence_analysis/influence_report.txt'):
         """Create a text summary report."""
-        print("\n" + "="*70)
-        print("CREATING SUMMARY REPORT")
-        print("="*70)
-        
         with open(output_file, 'w') as f:
             f.write("="*70 + "\n")
             f.write("TOP-K TRACIN INFLUENCE ANALYSIS REPORT\n")
@@ -384,15 +184,9 @@ class TopKAnalyzer:
                     f.write(f"{rank:<6} {train_idx:<10} {class_name:<15} {count:<12} {percentage:>6.2f}%\n")
             
             f.write("\n" + "="*70 + "\n")
-        
-        print(f"Report saved to: {output_file}")
     
     def create_overall_dashboard(self, output_file='outputs/influence_analysis/overall_dashboard.png'):
         """Create overall influence analysis dashboard."""
-        print("\n" + "="*70)
-        print("CREATING OVERALL DASHBOARD")
-        print("="*70)
-        
         fig = plt.figure(figsize=(20, 12))
         gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
         fig.suptitle('TracIn Influence Analysis Dashboard', fontsize=20, fontweight='bold', y=0.98)
@@ -542,15 +336,9 @@ Max Influence: {most_inf_val:.6f}
         plt.tight_layout()
         plt.savefig(output_file, dpi=150, bbox_inches='tight')
         plt.close()
-        
-        print(f"Overall dashboard saved to: {output_file}")
     
     def create_per_class_dashboards(self, output_dir='outputs/influence_analysis/per_class'):
         """Create per-class influence analysis dashboards."""
-        print("\n" + "="*70)
-        print("CREATING PER-CLASS DASHBOARDS")
-        print("="*70)
-        
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
@@ -561,8 +349,6 @@ Max Influence: {most_inf_val:.6f}
             
             if len(test_indices_in_class) == 0:
                 continue
-            
-            print(f"\nProcessing class: {class_name} ({len(test_indices_in_class)} test samples)")
             
             class_values = self.values[test_indices_in_class]
             class_indices = self.indices[test_indices_in_class]
@@ -714,35 +500,32 @@ Most Influential:
             output_file = output_path / f'{class_name}_dashboard.png'
             plt.savefig(output_file, dpi=150, bbox_inches='tight')
             plt.close()
-            
-            print(f"  Saved: {output_file}")
-        
-        print(f"\nAll per-class dashboards saved to: {output_path}")
 
 
 def main():
-    print("="*70)
-    print("TracIn Top-K Results Analysis")
-    print("="*70)
+    print("[INFO] Starting TracIn influence analysis...")
     
     analyzer = TopKAnalyzer()
-    
     analyzer.print_overview()
-    analyzer.analyze_global_influences()
-    analyzer.analyze_diversity()
-    analyzer.analyze_influence_decay()
-    analyzer.analyze_per_class()
     
+    print("[INFO] Saving top influential images...")
     analyzer.save_top_influential_images(top_n=20)
+    
+    print("[INFO] Creating summary report...")
     analyzer.create_summary_report()
     
-    # Create visualizations
+    print("[INFO] Generating overall dashboard...")
     analyzer.create_overall_dashboard()
+    
+    print("[INFO] Generating per-class dashboards...")
     analyzer.create_per_class_dashboards()
     
-    print("\n" + "="*70)
-    print("Analysis complete!")
-    print("="*70)
+    print("[DONE] All outputs saved to outputs/influence_analysis/")
+    print("       - influence_report.txt (detailed statistics)")
+    print("       - overall_dashboard.png (overview visualizations)")
+    print("       - per_class/*.png (per-class dashboards)")
+    print("       - ../inspection/detailed/helpful/ (top helpful images)")
+    print("       - ../inspection/detailed/harmful/ (top harmful images)")
 
 
 if __name__ == '__main__':

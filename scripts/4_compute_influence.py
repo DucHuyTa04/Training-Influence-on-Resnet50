@@ -1,16 +1,4 @@
-"""
-Efficient TracIn with Ghost Dot-Product and Top-K Selection
-
-Usage:
-    # Test on small subset
-    python efficient_tracin.py --train_subset 100 --test_subset 10 --top_k 20
-    
-    # Recommended
-    python efficient_tracin.py --train_subset 1000 --test_subset 100 --top_k 100
-    
-    # Full dataset
-    python efficient_tracin.py --top_k 100
-"""
+"""TracIn influence computation with Ghost Dot-Product optimization."""
 
 import os
 import sys
@@ -28,10 +16,10 @@ from torchvision import datasets, transforms
 from tqdm.auto import tqdm
 import pandas as pd
 
-# Add utils directory to path
 sys.path.insert(0, str(Path(__file__).parent / 'utils'))
 
 from model_architecture import ResNet50_Animals10
+from version_manager import VersionManager
 from influence_utils import (
     InfluenceHook,
     compute_ghost_influence_batch,
@@ -46,7 +34,6 @@ def setup_data_loaders(
     test_subset: Optional[int] = None,
     num_workers: int = 4
 ) -> Tuple[DataLoader, DataLoader, Dataset, Dataset]:
-    """Setup train and test data loaders."""
     
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -139,8 +126,8 @@ def precompute_test_features(
     model.eval()
     all_test_features = []
     
-    print("Precomputing test influence features...")
-    for inputs, labels in tqdm(test_loader, desc="Test features"):
+    print("[COMPUTE] Precomputing test influence features...")
+    for inputs, labels in tqdm(test_loader, desc="Test features", leave=False):
         with torch.set_grad_enabled(True):  # Need gradients for backward
             features = compute_influence_features_batch(
                 model, hook, inputs, labels, criterion, device
@@ -173,9 +160,9 @@ def compute_top_k_influences_single_checkpoint(
     
     tracker = TopKInfluenceTracker(k=top_k, num_test=num_test, device=device)
     
-    print(f"Computing influences (learning_rate={learning_rate:.2e})...")
+    print(f"[COMPUTE] Computing influences (lr={learning_rate:.2e})...")
     
-    for inputs, labels in tqdm(train_loader, desc="Processing train batches"):
+    for inputs, labels in tqdm(train_loader, desc="Train batches", leave=False):
         with torch.set_grad_enabled(True):
             train_features = compute_influence_features_batch(
                 model, hook, inputs, labels, criterion, device
@@ -336,58 +323,68 @@ def create_results_dataframe(
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Efficient TracIn with Ghost Dot-Product')
+    parser = argparse.ArgumentParser(description='Compute TracIn influence scores')
     
-    # Data paths
-    parser.add_argument('--data_dir', type=str, default='data/processed',
-                        help='Path to processed data directory')
-    parser.add_argument('--checkpoint_dir', type=str, default='models/checkpoints',
-                        help='Directory containing checkpoints')
-    parser.add_argument('--output_dir', type=str, default='outputs/influence_analysis',
-                        help='Output directory for results')
-    
-    # Computation parameters
-    parser.add_argument('--top_k', type=int, default=100,
-                        help='Number of top influences to keep per test sample')
-    parser.add_argument('--batch_size', type=int, default=32,
-                        help='Batch size for processing')
-    
-    # Subset options for testing
-    parser.add_argument('--train_subset', type=int, default=None,
-                        help='Number of train samples to use (None = all)')
-    parser.add_argument('--test_subset', type=int, default=None,
-                        help='Number of test samples to use (None = all)')
+    parser.add_argument('--version', type=int, help='Model version number')
+    parser.add_argument('--data_dir', type=str, default='data/processed', help='Data directory')
+    parser.add_argument('--checkpoint_dir', type=str, help='Checkpoint directory (overrides version)')
+    parser.add_argument('--output_dir', type=str, help='Output directory (auto if version specified)')
+    parser.add_argument('--top_k', type=int, default=100, help='Top influences per test sample')
+    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
+    parser.add_argument('--train_subset', type=int, default=None, help='Train subset (None = all)')
+    parser.add_argument('--test_subset', type=int, default=None, help='Test subset (None = all)')
     
     args = parser.parse_args()
     
-    # Find all checkpoints
-    checkpoint_dir = Path(args.checkpoint_dir)
+    script_dir = Path(__file__).parent.parent
+    data_dir = script_dir / args.data_dir
+    
+    vm = VersionManager(script_dir)
+    
+    if args.checkpoint_dir:
+        checkpoint_dir = Path(args.checkpoint_dir)
+        output_dir = args.output_dir if args.output_dir else 'outputs/influence_analysis'
+        version_num = None
+    elif args.version:
+        version_num = args.version
+        checkpoint_dir = script_dir / 'models' / 'checkpoints' / f'v{version_num}'
+        output_dir = script_dir / 'outputs' / f'v{version_num}' / 'influence_analysis'
+    else:
+        latest_version = vm.get_latest_version()
+        if latest_version is None:
+            raise ValueError("No trained models found. Use --version or train a model first.")
+        version_num = latest_version
+        checkpoint_dir = script_dir / 'models' / 'checkpoints' / f'v{version_num}'
+        output_dir = script_dir / 'outputs' / f'v{version_num}' / 'influence_analysis'
+    
     checkpoint_paths = sorted(checkpoint_dir.glob('finetune_epoch_*.pth'))
     
     if len(checkpoint_paths) == 0:
-        print(f"ERROR: No checkpoints found in {checkpoint_dir}")
-        print("Please train a model first with checkpoint saving enabled.")
-        return
+        raise FileNotFoundError(f"No checkpoints in {checkpoint_dir}")
     
     checkpoint_paths = [str(p) for p in checkpoint_paths]
     
-    print("="*60)
-    print("Efficient TracIn with Ghost Dot-Product")
-    print("="*60)
-    print(f"Found {len(checkpoint_paths)} checkpoints")
+    print("=" * 70)
+    print("TracIn Influence Computation")
+    print("=" * 70)
+    if version_num:
+        print(f"[VERSION] Model: v{version_num}")
+    print(f"[CHECKPOINTS] {len(checkpoint_paths)} found")
+    print(f"[CONFIG] Top-K: {args.top_k} | Batch: {args.batch_size}")
+    print(f"[OUTPUT] {output_dir}")
+    print("=" * 70)
     
-    # Run TracIn
     compute_tracin_multi_checkpoint(
         checkpoint_paths=checkpoint_paths,
-        data_dir=args.data_dir,
-        output_dir=args.output_dir,
+        data_dir=str(data_dir),
+        output_dir=str(output_dir),
         top_k=args.top_k,
         batch_size=args.batch_size,
         train_subset=args.train_subset,
         test_subset=args.test_subset
     )
     
-    print("\nTracIn computation complete!")
+    print("\n[DONE] Influence computation complete")
 
 
 if __name__ == '__main__':

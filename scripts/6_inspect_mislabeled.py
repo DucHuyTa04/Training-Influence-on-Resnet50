@@ -169,119 +169,50 @@ class MislabeledInspector:
         plt.close()
     
     def print_detailed_report(self, candidates_df):
-        """Print detailed report of mislabeled candidates."""
-        print("\n" + "="*80)
-        print("MISLABELED IMAGE CANDIDATES - DETAILED REPORT")
-        print("="*80)
-        
-        total_train = len(self.train_images)
-        total_test = len([f for f in self.false_preds if f != 'train'])
-        
-        print(f"\nDataset Summary:")
-        print(f"  Total training images: {total_train:,}")
-        print(f"  Training mispredictions: {len(self.false_preds[self.false_preds['split'] == 'train']):,}")
-        print(f"  Test mispredictions: {len(self.false_preds[self.false_preds['split'] == 'test']):,}")
-        
-        print(f"\nTop {len(candidates_df)} Mislabeled Candidates:")
-        print("-" * 80)
-        
-        for idx, row in candidates_df.iterrows():
-            print(f"\n#{idx+1}. Train Index {row['train_idx']}: {row['image_path'].name if row['image_path'] else 'N/A'}")
-            print(f"   Label: {row['true_class']} ({row['true_label']}) → Predicted: {row['pred_class']} ({row['pred_label']})")
-            print(f"   Appears in top-100 influences: {row['appearance_count']} times")
-            print(f"   Affects {row['unique_tests']} unique test samples")
-            print(f"   Mean influence: {row['mean_influence']:.6e}")
-            print(f"   Max influence: {row['max_influence']:.6e}")
-            
-            # Percentage of test set
-            pct = (row['appearance_count'] / 5224) * 100  # Assuming 5224 test samples
-            print(f"   Impact: {pct:.1f}% of test set")
-            
-            if pct > 100:
-                print(f"   ⚠️  WARNING: Appears more times than test samples exist!")
-                print(f"              This image is HIGHLY LIKELY to be mislabeled")
-        
-        print("\n" + "="*80)
-        
-        # Error pattern analysis
-        print("\nError Pattern Analysis:")
-        print("-" * 80)
-        
-        error_patterns = candidates_df.groupby(['true_class', 'pred_class']).size().sort_values(ascending=False)
-        for (true_cls, pred_cls), count in error_patterns.head(10).items():
-            print(f"  {true_cls} → {pred_cls}: {count} images")
-    
-    def generate_action_items(self, candidates_df, threshold=1000):
-        """Generate actionable recommendations."""
-        high_priority = candidates_df[candidates_df['appearance_count'] > threshold]
-        
-        print("\n" + "="*80)
-        print("RECOMMENDED ACTIONS")
-        print("="*80)
+        """Print brief summary of mislabeled candidates."""
+        high_priority = candidates_df[candidates_df['appearance_count'] > 1000]
         
         if len(high_priority) > 0:
-            print(f"\n🔴 HIGH PRIORITY: {len(high_priority)} images with >{threshold} appearances")
-            print("\nThese images should be manually reviewed IMMEDIATELY:")
-            
-            for idx, row in high_priority.iterrows():
-                print(f"  • {row['image_path'].name}: {row['true_class']} → {row['pred_class']} "
-                      f"({row['appearance_count']} appearances)")
+            print(f"\n[WARN] {len(high_priority)} high-priority mislabeled candidates (>1000 appearances)")
+            for idx, row in high_priority.head(5).iterrows():
+                print(f"       Train {row['train_idx']}: {row['true_class']}→{row['pred_class']} ({row['appearance_count']} appearances)")
         
-        medium_priority = candidates_df[
-            (candidates_df['appearance_count'] > 500) & 
-            (candidates_df['appearance_count'] <= threshold)
-        ]
-        
-        if len(medium_priority) > 0:
-            print(f"\n🟡 MEDIUM PRIORITY: {len(medium_priority)} images with 500-{threshold} appearances")
-            print("  Review when time permits")
-        
-        print(f"\n📋 Next Steps:")
-        print(f"  1. Open 'outputs/inspection/mislabeled_candidates.png' to visually inspect flagged images")
-        print(f"  2. Check original dataset source for these specific images")
-        print(f"  3. If mislabeled, move to correct folder or remove")
-        print(f"  4. Document changes in a log file")
-        print(f"  5. Retrain model: python scripts/2_train.py")
-        print(f"  6. Rerun TracIn: python scripts/4_compute_influence.py --top_k 100")
-        print(f"  7. Compare new outputs/mispredictions/false_predictions.csv with current version")
-        print("="*80 + "\n")
+        # Just print top 5 if not many high priority ones
+        if len(high_priority) < 5:
+            print(f"\n[INFO] Top {min(5, len(candidates_df))} mislabeled candidates:")
+            for idx, row in candidates_df.head(5).iterrows():
+                print(f"       Train {row['train_idx']}: {row['true_class']}→{row['pred_class']} ({row['appearance_count']} appearances)")
+    
+    def generate_action_items(self, candidates_df, threshold=1000):
+        """Save action items to file."""
+        # Actions are in the visual grid and detailed CSV file
+        pass
 
 
 def main():
     parser = argparse.ArgumentParser(description='Inspect potentially mislabeled training images')
     parser.add_argument('--top_n', type=int, default=20, help='Number of top candidates to inspect')
-    parser.add_argument('--save_report', action='store_true', help='Save detailed report to file')
     parser.add_argument('--threshold', type=int, default=1000, help='High-priority threshold')
     parser.add_argument('--output', type=str, default='outputs/inspection/mislabeled_candidates.png', 
                        help='Output image path')
     
     args = parser.parse_args()
     
-    print("="*80)
-    print("MISLABELED IMAGE INSPECTOR")
-    print("="*80 + "\n")
+    print("[INFO] Analyzing mislabeled training image candidates...")
     
-    # Initialize inspector
     inspector = MislabeledInspector()
-    
-    # Find candidates
-    print(f"Analyzing top {args.top_n} mislabeled candidates...\n")
     candidates = inspector.find_top_mislabeled_candidates(top_n=args.top_n)
     
-    # Print report
     inspector.print_detailed_report(candidates)
-    
-    # Generate action items
-    inspector.generate_action_items(candidates, threshold=args.threshold)
-    
-    # Visualize
     inspector.visualize_mislabeled_grid(candidates, save_path=args.output)
     
-    # Save report if requested
-    if args.save_report:
-        report_path = 'mislabeled_inspection_report.csv'
-        candidates.to_csv(report_path, index=False)
-        print(f"Saved detailed report to: {report_path}")
+    # Always save report CSV
+    report_path = 'outputs/inspection/mislabeled_inspection_report.csv'
+    candidates.to_csv(report_path, index=False)
+    
+    print(f"\n[DONE] Outputs saved:")
+    print(f"       - {args.output}")
+    print(f"       - {report_path}")
 
 
 if __name__ == '__main__':

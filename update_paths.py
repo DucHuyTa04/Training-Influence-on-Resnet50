@@ -51,7 +51,7 @@ def update_file(filepath):
     if content != original_content:
         with open(filepath, 'w') as f:
             f.write(content)
-        print(f"  ✓ Updated {filepath}")
+        print(f"  [UPDATED] {filepath}")
         return True
     else:
         print(f"  - No changes needed")
@@ -68,7 +68,7 @@ def main():
         if update_file(filepath):
             updated_count += 1
     
-    print(f"\n✓ Updated {updated_count} files")
+    print(f"\n[DONE] Updated {updated_count} files")
     print("\nYou can now delete this script: rm update_paths.py")
 
 if __name__ == '__main__':
