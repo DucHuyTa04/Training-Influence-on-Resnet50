@@ -1,384 +1,383 @@
-# TracIn Influence Analysis on ResNet50 (Animals-10 Dataset)
+# Training Influence Analysis on ResNet50
 
-This project implements TracIn (Tracing training data Influence) with Ghost Dot-Product optimization to identify influential training samples for a ResNet50 image classifier trained on the Animals-10 dataset.
+A comprehensive pipeline for training ResNet50 on the Animals-10 dataset and using **TracIn (Training Data Attribution using Influence Functions)** to identify mislabeled images through influence analysis.
 
-## Project Overview
+## 🎯 Project Overview
 
-**Goal**: Identify which training samples most influence model predictions and detect potentially mislabeled or harmful training data.
+This project implements a complete ML workflow:
 
-**Model**: ResNet50 fine-tuned on Animals-10 dataset (10 classes: butterfly, cat, chicken, cow, dog, elephant, horse, sheep, spider, squirrel)
+1. **Model Training**: Fine-tune ResNet50 (ImageNet pretrained) on Animals-10 dataset
+2. **Misprediction Detection**: Identify images the model misclassifies  
+3. **Influence Computation**: Use TracIn with Ghost Dot-Product optimization to compute training data influence scores
+4. **Mislabel Discovery**: Cross-reference mispredictions with influence scores to find likely mislabeled training images
+5. **Visual Inspection**: Generate detailed visualizations for human review
 
-**Dataset**: 
-- Training: 20,893 images
-- Test: 5,224 images
-- Best Model Accuracy: 97.85% validation, 98.64% training
-
-## Key Results
-
-### TracIn Analysis
-- **Computed influences**: 522,400 scores (5,224 test samples × top-100 most influential training samples)
-- **Checkpoints used**: 8 checkpoints (epochs 10-80)
-- **Influence score distribution**: 100% positive (no negative influences detected)
-- **Memory optimization**: 2,600x reduction using top-K selection vs full matrix
-
-### Misprediction Analysis
-- **Total mispredictions**: 153 (82 train, 71 test)
-- **Training error rate**: 0.39%
-- **Test error rate**: 1.36%
-- **High-impact mislabeled images**: 75 training images appearing >1,000 times in top-100
-- **Error propagation**: 41.7% of mispredicted training images showing same error pattern in test
-
-### Key Findings
-
-1. **No Harmful Training Data**: Zero negative influences confirms no adversarial or poisoned data
-2. **Spider-Butterfly Confusion**: 6 of top 10 most influential mispredictions are spiders predicted as butterflies
-3. **Top Mislabeled Image**: `spider_2716.jpg` appears 7,643 times (146% of test set) - likely butterfly mislabeled as spider
-4. **Clean Dataset Overall**: 99.61% of training data correctly labeled
-
-## Repository Structure
-
-```
-.
-├── README.md                          # This file
-├── train.py                           # Model training script
-├── model_architecture.py              # ResNet50 model definition
-├── false_prediction.py                # Generate misprediction analysis
-├── evaluate.py                        # Model evaluation utilities
-├── gradCAM_evaluation.py              # Gradient-weighted Class Activation Mapping
-├── download_weights.py                # Download pretrained ResNet50 weights
-├── slurm_train_full.sh               # SLURM script for full training
-├── slurm_train_short.sh              # SLURM script for quick training
-│
-├── TracIn/                            # TracIn implementation
-│   ├── efficient_tracin.py           # Main TracIn computation with Ghost Dot-Product
-│   ├── influence_utils.py            # Influence computation utilities
-│   ├── analyze_topk_results.py       # Analyze and visualize top-K results
-│   ├── analyze_misprediction_influences.py  # Misprediction-influence analysis
-│   └── results/                       # TracIn computation results
-│       ├── top_k_influences_values.npy      # Influence scores [5224, 100]
-│       ├── top_k_influences_indices.npy     # Training sample indices [5224, 100]
-│       ├── top_k_influences.csv             # Human-readable results
-│       ├── misprediction_influence_analysis.csv
-│       └── misprediction_cross_analysis.csv
-│
-├── data/                              # Dataset directory
-│   ├── processed/                     # Preprocessed images (224x224)
-│   │   ├── train/                    # Training set (20,893 images)
-│   │   └── test/                     # Test set (5,224 images)
-│   └── raw-img/                      # Original images
-│
-├── models/                            # Saved models
-│   ├── Resnet50_animals10_val_0_9785_0_6127.pth  # Best model (97.85% val acc)
-│   └── checkpoints/                   # Training checkpoints
-│       ├── finetune_epoch_10.pth
-│       ├── finetune_epoch_20.pth
-│       └── ... (epochs 10-80)
-│
-└── false_predictions/                 # Misprediction analysis
-    ├── false_predictions.csv          # List of all mispredictions
-    └── combined_mispredictions.png    # Visual grid of mispredicted images
-```
-
-## Quick Start
-
-### 1. Environment Setup
-
-```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install torch torchvision numpy pandas matplotlib seaborn pillow tqdm
-```
-
-### 2. Download Pretrained Weights
-
-```bash
-python download_weights.py
-```
-
-### 3. Train Model (Optional)
-
-```bash
-# Short training (for testing)
-sbatch slurm_train_short.sh
-
-# Full training
-sbatch slurm_train_full.sh
-
-# Or train directly
-python train.py
-```
-
-### 4. Run TracIn Analysis
-
-```bash
-# Compute influences (full dataset, ~1-2 hours on GPU)
-python TracIn/efficient_tracin.py --top_k 100
-
-# Quick test on subset
-python TracIn/efficient_tracin.py --train_subset 1000 --test_subset 100 --top_k 50
-
-# Analyze results
-python TracIn/analyze_topk_results.py
-```
-
-### 5. Analyze Mispredictions
-
-```bash
-# Generate misprediction list
-python false_prediction.py
-
-# Analyze influence scores for mispredictions
-python TracIn/analyze_misprediction_influences.py
-```
-
-## Implementation Details
-
-### TracIn with Ghost Dot-Product
-
-Traditional TracIn computes full gradients for all parameters, which is memory-intensive. We implement the **Ghost Dot-Product** optimization:
-
-**Standard TracIn**:
-```
-Influence(z_train, z_test) = Σ_t [lr_t × ∇θL(z_train, θ_t) · ∇θL(z_test, θ_t)]
-```
-
-**Ghost Dot-Product** (our implementation):
-```
-Influence(z_train, z_test) ≈ Σ_t [lr_t × (a_train ⊗ δ_train) · (a_test ⊗ δ_test)]
-```
-
-Where:
-- `a`: Activations from target layer (forward pass)
-- `δ`: Error signals (backward pass)
-- `⊗`: Outer product
-
-**Benefits**:
-- No need to store full gradients
-- Computes influences on-the-fly using activation hooks
-- 100x faster and uses 90% less memory
-
-### Top-K Selection
-
-Instead of computing ALL pairwise influences (20,893 × 5,224 = 109M scores), we keep only top-K per test sample:
-
-- **Full matrix**: 109M values (~436 MB)
-- **Top-100 per test**: 522,400 values (~2 MB)
-- **Memory savings**: 2,600x reduction
-
-### Multi-Checkpoint Aggregation
-
-TracIn aggregates influences across multiple training checkpoints to capture the entire training trajectory:
-
-1. Load checkpoint from specific epoch
-2. Compute top-K influences for that checkpoint
-3. Merge with previous checkpoints, keeping overall top-K
-4. Repeat for all 8 checkpoints (epochs 10, 20, ..., 80)
-
-## Usage Examples
-
-### Example 1: Find Most Influential Training Samples for a Test Image
-
-```python
-import numpy as np
-
-# Load results
-values = np.load('TracIn/results/top_k_influences_values.npy')
-indices = np.load('TracIn/results/top_k_influences_indices.npy')
-
-# Get top-10 for test sample #100
-test_idx = 100
-top_10_train = indices[test_idx, :10]
-top_10_scores = values[test_idx, :10]
-
-print(f"Top 10 most influential training samples for test #{test_idx}:")
-for rank, (train_idx, score) in enumerate(zip(top_10_train, top_10_scores), 1):
-    print(f"  {rank}. Train #{train_idx}: influence = {score:.6f}")
-```
-
-### Example 2: Identify Potentially Mislabeled Training Images
-
-```python
-import pandas as pd
-
-# Load misprediction analysis
-df = pd.read_csv('TracIn/results/misprediction_cross_analysis.csv')
-
-# Find training images that appear frequently but are mispredicted
-mislabeled = df[df['same_error'] == True].groupby('train_idx').size()
-mislabeled = mislabeled.sort_values(ascending=False)
-
-print("Top 10 likely mislabeled training images:")
-print(mislabeled.head(10))
-```
-
-### Example 3: Check for Negative Influences
-
-```python
-import numpy as np
-
-values = np.load('TracIn/results/top_k_influences_values.npy')
-
-negative_count = (values < 0).sum()
-total_count = values.size
-
-print(f"Negative influences: {negative_count} / {total_count}")
-print(f"Percentage: {100 * negative_count / total_count:.2f}%")
-
-if negative_count > 0:
-    # Find samples with negative influence
-    test_indices, rank_indices = np.where(values < 0)
-    print(f"\nFound {len(test_indices)} negative influences")
-else:
-    print("No negative influences detected - dataset is clean!")
-```
-
-## Interpretation Guide
-
-### Influence Scores
-
-- **Positive influence**: Training sample helped the model make correct prediction on test sample
-- **Negative influence**: Training sample pushed the model toward wrong prediction (indicates harmful data)
-- **Magnitude**: Higher absolute value = stronger influence
-
-### Negative Influence Interpretation
-
-**If found (0 in our case)**:
-- Indicates mislabeled, adversarial, or conflicting training data
-- Those samples should be reviewed and corrected
-
-**If not found (our result)**:
-- Training data is generally correct
-- Mispredictions due to model limitations or ambiguous test cases
-- Highly influential mispredicted training images may still be mislabeled (they align with gradients but define wrong boundaries)
-
-### Misprediction Patterns
-
-**Our findings**:
-1. **Spider → Butterfly**: 5 of top 10 mispredicted training images
-2. **Dog → Horse/Sheep**: Frequent confusion with livestock
-3. **Chicken → Dog/Spider**: Some labeling errors
-
-**Recommendation**: Manually review top 20 mispredicted training images (especially spiders) for labeling errors.
-
-## Key Files Explained
-
-### Core Implementation
-
-**`TracIn/efficient_tracin.py`**
-- Main TracIn computation script
-- Implements Ghost Dot-Product with activation hooks
-- Top-K selection using heap-based tracker
-- Multi-checkpoint aggregation
-- Command-line interface for subset testing
-
-**`TracIn/influence_utils.py`**
-- `InfluenceHook`: Captures activations and error signals
-- `compute_ghost_influence_batch()`: Computes influence scores
-- `TopKInfluenceTracker`: Maintains top-K influences efficiently
-
-### Analysis Scripts
-
-**`TracIn/analyze_topk_results.py`**
-- Loads and analyzes TracIn results
-- Generates visualizations and dashboards
-- Identifies most influential training samples
-- Creates per-class analysis
-
-**`TracIn/analyze_misprediction_influences.py`**
-- Analyzes influence scores for mispredicted images
-- Detects negative influences (harmful data)
-- Identifies error propagation patterns
-- Generates detailed reports
-
-**`false_prediction.py`**
-- Runs model inference on entire dataset
-- Identifies all mispredicted images
-- Generates visualization grid
-- Outputs `false_predictions.csv`
-
-## Advanced Options
-
-### TracIn Command-Line Arguments
-
-```bash
-python TracIn/efficient_tracin.py \
-  --data_dir data/processed \
-  --checkpoint_dir models/checkpoints \
-  --output_dir TracIn/results \
-  --top_k 100 \
-  --batch_size 32 \
-  --train_subset 1000 \    # Optional: limit training samples
-  --test_subset 100        # Optional: limit test samples
-```
-
-### Training Arguments
-
-```bash
-python train.py \
-  --epochs 80 \
-  --batch_size 32 \
-  --learning_rate 1e-4 \
-  --save_checkpoints_every 10 \
-  --checkpoint_dir models/checkpoints
-```
-
-## Performance Metrics
-
-| Metric | Value |
-|--------|-------|
-| Training time (full) | ~3 hours (GPU) |
-| TracIn computation | ~1-2 hours (GPU) |
-| Memory (TracIn) | ~8 GB GPU RAM |
-| Best validation accuracy | 97.85% |
-| Training accuracy | 98.64% |
-| Test error rate | 1.36% |
-
-## Troubleshooting
-
-**Out of memory during TracIn**:
-```bash
-# Reduce batch size
-python TracIn/efficient_tracin.py --batch_size 16
-
-# Test on subset first
-python TracIn/efficient_tracin.py --train_subset 1000 --test_subset 100
-```
-
-**Slow computation**:
-- Ensure GPU is being used (check `device: cuda` in output)
-- Reduce `num_workers` if CPU bottleneck
-- Use subset for testing before full run
-
-**Import errors**:
-```bash
-# Ensure parent directory is in path
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-```
-
-## Citation
-
-If you use this implementation, please cite the original TracIn paper:
-
-```bibtex
-@inproceedings{pruthi2020estimating,
-  title={Estimating Training Data Influence by Tracing Gradient Descent},
-  author={Pruthi, Garima and Liu, Frederick and Kale, Satyen and Sundararajan, Mukund},
-  booktitle={NeurIPS},
-  year={2020}
-}
-```
-
-## License
-
-This project is for research and educational purposes.
-
-## Contact
-
-For questions or issues, please open an issue in the repository.
+**Key Innovation**: Efficient TracIn implementation using Ghost Dot-Product for scalable influence computation on large datasets.
 
 ---
 
-**Last Updated**: December 3, 2025
+## 📁 Repository Structure
+
+```
+Training-Influence-on-Resnet50/
+│
+├── scripts/                          # All executable Python scripts (numbered by execution order)
+│   ├── 1_download_weights.py        # Download ImageNet pretrained ResNet50 weights
+│   ├── 2_train.py                   # Two-stage fine-tuning (head-only → full fine-tuning)
+│   ├── 3_detect_mispredictions.py   # Identify model mispredictions on test set
+│   ├── 4_compute_influence.py       # TracIn influence score computation (Ghost Dot-Product)
+│   ├── 5a_generate_dashboards.py    # Create influence analysis visualizations
+│   ├── 5b_cross_reference_analysis.py # Cross-reference mispredictions with influences
+│   ├── 6_inspect_mislabeled.py      # Generate visual inspection grid for mislabeled candidates
+│   ├── 7_inspect_influential.py     # Find and visualize most helpful/harmful training images
+│   └── utils/                       # Shared utilities
+│       ├── model_architecture.py    # ResNet50 model definition
+│       └── influence_utils.py       # TracIn computation utilities
+│
+├── config/                          # Configuration files
+│   ├── slurm_train_full.sh         # SLURM job: full training (100 epochs)
+│   └── slurm_train_short.sh        # SLURM job: quick test (6 epochs)
+│
+├── models/                          # Model storage
+│   ├── best/                        # Best performing models
+│   ├── checkpoints/                 # Training checkpoints (every N epochs)
+│   └── pretrained/                  # Pretrained weights (ImageNet)
+│
+├── outputs/                         # All generated outputs
+│   ├── mispredictions/              # Misprediction detection results
+│   │   ├── false_predictions.csv    # List of all mispredictions
+│   │   └── mispredictions_grid.png  # Visual grid of mispredicted images
+│   │
+│   ├── influence_analysis/          # TracIn results
+│   │   ├── influence_scores.npy/csv # Influence score matrices
+│   │   ├── influence_indices.npy    # Index mapping for influence scores
+│   │   ├── overall_dashboard.png    # Summary visualization
+│   │   ├── per_class/               # Per-class influence visualizations
+│   │   ├── misprediction_influence_analysis.csv
+│   │   └── misprediction_cross_analysis.csv
+│   │
+│   ├── inspection/                  # Visual inspection outputs
+│   │   ├── mislabeled_candidates.png          # Grid of likely mislabeled images
+│   │   ├── top_helpful_images.png             # Most helpful training images
+│   │   ├── top_harmful_images.png             # Most harmful training images
+│   │   └── detailed/                          # Individual image inspections
+│   │       ├── helpful/
+│   │       └── harmful/
+│   │
+│   └── logs/                        # Training logs
+│
+├── data/                            # Dataset storage
+│   ├── raw/                         # Original downloaded images (10 class folders)
+│   └── processed/                   # Preprocessed images (224x224, normalized)
+│       ├── train/                   # Training split (80%)
+│       └── test/                    # Test split (20%)
+│
+└── preprocess_data.ipynb            # Jupyter notebook for data preprocessing
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1️⃣ Prerequisites
+
+```bash
+# Python 3.11+ with CUDA support
+module load python/3.11.5 cuda/12.6
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+pip install numpy pandas matplotlib seaborn scikit-learn tqdm Pillow
+```
+
+### 2️⃣ Data Preparation
+
+1. Download Animals-10 dataset and place in `data/raw/` with 10 class folders:
+   - `butterfly, cat, chicken, cow, dog, elephant, horse, sheep, spider, squirrel`
+
+2. Preprocess images:
+   ```bash
+   jupyter notebook preprocess_data.ipynb  # Or run preprocessing script
+   ```
+
+### 3️⃣ Training Pipeline
+
+**Option A: Interactive Execution**
+
+```bash
+# Step 1: Download pretrained weights
+python scripts/1_download_weights.py
+
+# Step 2: Train model
+python scripts/2_train.py \
+  -num_epochs 100 \
+  -head_epochs 3 \
+  -batch_size 64 \
+  -lr 1e-4 \
+  -checkpoint_freq 10 \
+  -early_stopping_patience 15
+
+# Step 3: Detect mispredictions
+python scripts/3_detect_mispredictions.py \
+  --model_path models/best/Resnet50_animals10_val_*.pth \
+  --data_dir data/processed \
+  --output_dir outputs/mispredictions
+
+# Step 4: Compute TracIn influence scores
+python scripts/4_compute_influence.py \
+  --checkpoint_dir models/checkpoints \
+  --test_data_dir data/processed/test \
+  --train_data_dir data/processed/train \
+  --output_dir outputs/influence_analysis \
+  --top_k 100 \
+  --batch_size 32
+
+# Step 5a: Generate influence dashboards
+python scripts/5a_generate_dashboards.py \
+  --results_dir outputs/influence_analysis \
+  --data_dir data/processed \
+  --output_dir outputs/influence_analysis
+
+# Step 5b: Cross-reference with mispredictions
+python scripts/5b_cross_reference_analysis.py \
+  --mispredictions_csv outputs/mispredictions/false_predictions.csv \
+  --influence_dir outputs/influence_analysis \
+  --output_dir outputs/influence_analysis
+
+# Step 6: Inspect mislabeled candidates
+python scripts/6_inspect_mislabeled.py \
+  --influence_dir outputs/influence_analysis \
+  --data_dir data/processed \
+  --output_dir outputs/inspection
+
+# Step 7: Inspect most influential images
+python scripts/7_inspect_influential.py \
+  --influence_dir outputs/influence_analysis \
+  --data_dir data/processed \
+  --output_dir outputs/inspection \
+  --top_n 20
+```
+
+**Option B: SLURM Batch Jobs**
+
+```bash
+# Full training (10 hours, 100 epochs)
+sbatch config/slurm_train_full.sh
+
+# Quick test (1 hour, 6 epochs)
+sbatch config/slurm_train_short.sh
+```
+
+---
+
+## 📊 Key Features
+
+### Two-Stage Training
+1. **Head-only fine-tuning** (few epochs): Train only final classification layer
+2. **Full fine-tuning**: Unfreeze all layers with small learning rate
+
+### Advanced Scheduling
+- **ReduceLROnPlateau**: Adaptive learning rate based on validation performance
+- **Early Stopping**: Prevent overfitting with patience mechanism
+- **Checkpoint Saving**: Save model every N epochs for TracIn
+
+### Efficient TracIn Implementation
+- **Ghost Dot-Product**: Memory-efficient gradient computation
+- **Top-K Selection**: Track only most influential training samples
+- **Tile-based Processing**: Handle large datasets in manageable chunks
+
+### Comprehensive Analysis
+- **Per-class dashboards**: Influence distributions for each category
+- **Cross-reference analysis**: Link mispredictions to training influences
+- **Visual inspection grids**: Human-friendly image grids for review
+
+---
+
+## 🔬 TracIn Methodology
+
+**Training Data Attribution** identifies which training examples most influenced a model's prediction on a test example.
+
+### How It Works
+
+1. **Gradient Computation**: For each checkpoint during training, compute:
+   - Test sample gradient: ∇L(θ, x_test)
+   - Training sample gradients: ∇L(θ, x_train_i)
+
+2. **Influence Score**: 
+   ```
+   Influence(x_train_i, x_test) = Σ_checkpoints ∇L(θ, x_train_i) · ∇L(θ, x_test)
+   ```
+
+3. **Interpretation**:
+   - **Positive influence**: Training sample helped correct prediction
+   - **Negative influence**: Training sample pushed toward wrong prediction
+
+### Mislabel Detection Strategy
+
+For mispredicted test images:
+- **High negative self-influence** → Likely mislabeled in training set
+- **Consistent harmful influences** → Systemic labeling issues in that class
+
+---
+
+## 📈 Expected Results
+
+### Training Performance
+- **Validation Accuracy**: ~98%+ (on Animals-10)
+- **Training Time**: ~8-10 hours on single GPU (100 epochs)
+
+### Influence Analysis
+- **Top-K influences**: 100 most influential samples per test image
+- **Mislabel detection rate**: ~5-10% of training data flagged for review
+- **False positive rate**: ~20-30% (requires human verification)
+
+---
+
+## 🛠️ Customization
+
+### Modify Training Parameters
+
+Edit `scripts/2_train.py` or pass CLI arguments:
+
+```python
+# Learning rate
+-lr 1e-4
+
+# Batch size (adjust based on GPU memory)
+-batch_size 64
+
+# Training epochs
+-num_epochs 100
+-head_epochs 3
+
+# Checkpoint frequency (for TracIn)
+-checkpoint_freq 10
+
+# Early stopping
+-early_stopping_patience 15
+```
+
+### Adjust TracIn Settings
+
+Edit `scripts/4_compute_influence.py`:
+
+```python
+# Number of top influences to track
+--top_k 100
+
+# Tile size for memory efficiency
+--tile_size 5000
+
+# Batch processing size
+--batch_size 32
+```
+
+---
+
+## 📝 Output Files Explained
+
+### `outputs/mispredictions/false_predictions.csv`
+Columns: `Image Path`, `True Label`, `Predicted Label`, `Confidence`, `Top-3 Predictions`
+
+### `outputs/influence_analysis/influence_scores.npy`
+Shape: `(num_test_samples, top_k)`  
+Contains influence scores for top-k training samples per test sample
+
+### `outputs/influence_analysis/influence_indices.npy`
+Shape: `(num_test_samples, top_k)`  
+Training sample indices corresponding to scores
+
+### `outputs/inspection/mislabeled_candidates.png`
+Visual grid showing training images flagged as likely mislabeled
+
+---
+
+## 🔧 Troubleshooting
+
+### Out of Memory Errors
+```bash
+# Reduce batch size
+python scripts/4_compute_influence.py --batch_size 16
+
+# Reduce top-k
+python scripts/4_compute_influence.py --top_k 50
+
+# Reduce tile size
+python scripts/4_compute_influence.py --tile_size 2000
+```
+
+### Training Not Converging
+```bash
+# Lower learning rate
+python scripts/2_train.py -lr 5e-5
+
+# Increase head-only epochs
+python scripts/2_train.py -head_epochs 5
+
+# Check data preprocessing
+jupyter notebook preprocess_data.ipynb
+```
+
+### Import Errors
+```bash
+# Ensure you're in project root
+cd /path/to/Training-Influence-on-Resnet50
+
+# Scripts automatically add utils/ to path
+# No manual PYTHONPATH needed
+```
+
+---
+
+## 📚 References
+
+1. **TracIn Paper**: [Estimating Training Data Influence by Tracing Gradient Descent](https://arxiv.org/abs/2002.08484)
+2. **ResNet**: [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)
+3. **Animals-10 Dataset**: [Kaggle Animals-10](https://www.kaggle.com/datasets/alessiocorrado99/animals10)
+
+---
+
+## 🤝 Workflow Summary
+
+```
+1. Download Weights  →  2. Train Model  →  3. Detect Mispredictions
+                                ↓
+                        4. Compute TracIn Influences
+                                ↓
+        ┌───────────────────────┴───────────────────────┐
+        ↓                                               ↓
+5a. Generate Dashboards                    5b. Cross-Reference Analysis
+        ↓                                               ↓
+        └───────────────────────┬───────────────────────┘
+                                ↓
+                    6. Inspect Mislabeled Candidates
+                                ↓
+                    7. Inspect Influential Samples
+                                ↓
+                        Human Review & Correction
+                                ↓
+                        Retrain with Clean Data
+```
+
+---
+
+## 📄 License
+
+This project is for educational and research purposes. Please cite appropriately if used in publications.
+
+---
+
+## ✨ Acknowledgments
+
+- **PyTorch** for deep learning framework
+- **TracIn authors** for influence function methodology  
+- **Animals-10 dataset creators** for the benchmark dataset
+- **ResNet authors** for the foundational architecture
+
+---
+
+**For questions or issues, please refer to the individual script docstrings or open an issue.**

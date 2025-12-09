@@ -3,11 +3,13 @@ data/
 __pycache__/
 gradcam_figures/
 venv/
-logs/
 slurm-*.out
 PROJECT_STATUS.md
 models/checkpoints/
-TracIn/top_influential/
-models/Resnet50_*.pth
+models/best/
+models/pretrained/
+outputs/
 *.out
 *.err
+*.pyc
+.ipynb_checkpoints/
