@@ -85,9 +85,9 @@ def create_misprediction_grid(mispredictions, class_names, output_path, max_imag
     cols = 10
     rows = (n + cols - 1) // cols
     
-    thumb_size = 100
-    label_height = 20
-    padding = 5
+    thumb_size = 120
+    label_height = 35
+    padding = 15
     
     canvas_width = cols * (thumb_size + padding) + padding
     canvas_height = rows * (thumb_size + label_height + padding) + padding

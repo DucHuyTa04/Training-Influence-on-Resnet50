@@ -13,3 +13,4 @@ outputs/
 *.err
 *.pyc
 .ipynb_checkpoints/
+models/version_registry.json
