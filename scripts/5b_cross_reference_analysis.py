@@ -5,6 +5,7 @@ Analyzes mispredictions to identify:
 3. Error propagation (mislabeled training images causing test errors)
 """
 
+import argparse
 import os
 import sys
 import numpy as np
@@ -14,6 +15,9 @@ from torchvision import datasets
 
 parent_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(parent_dir))
+sys.path.insert(0, str(parent_dir / 'scripts' / 'utils'))
+
+from version_manager import VersionManager
 
 def load_datasets():
     """
@@ -81,15 +85,33 @@ def match_path_to_index(target_path, dataset_paths):
     return None
 
 def main():
-    print("[INFO] Misprediction-Influence Cross-Analysis")
+    parser = argparse.ArgumentParser(description='Cross-reference mispredictions with influence scores')
+    parser.add_argument('--version', type=int, help='Model version number')
+    parser.add_argument('--mispredictions_csv', type=str, help='Path to mispredictions CSV (overrides version)')
+    parser.add_argument('--influence_dir', type=str, help='Path to influence results (overrides version)')
+    args = parser.parse_args()
     
-    # Load data
+    if args.mispredictions_csv and args.influence_dir:
+        mispred_path = Path(args.mispredictions_csv)
+        results_dir = Path(args.influence_dir)
+    elif args.version:
+        mispred_path = parent_dir / f'outputs/v{args.version}/mispredictions/false_predictions.csv'
+        results_dir = parent_dir / f'outputs/v{args.version}/influence_analysis'
+    else:
+        vm = VersionManager(parent_dir)
+        latest = vm.get_latest_version()
+        if latest is None:
+            print("[ERROR] No trained models found. Use --version or train a model first.")
+            return
+        mispred_path = parent_dir / f'outputs/v{latest}/mispredictions/false_predictions.csv'
+        results_dir = parent_dir / f'outputs/v{latest}/influence_analysis'
+        print(f"[VERSION] Using latest model: v{latest}")
+    
+    print(f"[INFO] Cross-referencing mispredictions with influences")
+    
     train_paths, train_labels, test_paths, test_labels, class_names = load_datasets()
     
-    false_pred_path = parent_dir / 'outputs/mispredictions/false_predictions.csv'
-    false_preds = pd.read_csv(false_pred_path)
-    
-    results_dir = parent_dir / 'outputs/influence_analysis'
+    false_preds = pd.read_csv(mispred_path)
     influence_values = np.load(results_dir / 'top_k_influences_values.npy') 
     influence_indices = np.load(results_dir / 'top_k_influences_indices.npy')
     
@@ -98,14 +120,12 @@ def main():
     train_mispred = false_preds[false_preds['split'] == 'train']
     test_mispred = false_preds[false_preds['split'] == 'test']
     
-    print(f"[INFO] Found {len(train_mispred)} train mispredictions, {len(test_mispred)} test mispredictions")
-    
     # Part 1: Analyze mispredicted training images
     train_mispred_indices = []
     train_mispred_info = []
     
     for idx, row in train_mispred.iterrows():
-        img_path = row['image_path']
+        img_path = row['path']
         train_idx = match_path_to_index(img_path, train_paths)
         
         if train_idx is not None:
@@ -113,10 +133,10 @@ def main():
             train_mispred_info.append({
                 'train_idx': train_idx,
                 'path': img_path,
-                'true_label': row['true_class_index'],
-                'pred_label': row['pred_class_index'],
-                'true_class': class_names[row['true_class_index']],
-                'pred_class': class_names[row['pred_class_index']]
+                'true_label': row['true'],
+                'pred_label': row['pred'],
+                'true_class': class_names[row['true']],
+                'pred_class': class_names[row['pred']]
             })
     
     # Count appearances in top-K
@@ -143,7 +163,7 @@ def main():
     test_mispred_info = []
     
     for idx, row in test_mispred.iterrows():
-        img_path = row['image_path']
+        img_path = row['path']
         test_idx = match_path_to_index(img_path, test_paths)
         
         if test_idx is not None:
@@ -151,10 +171,10 @@ def main():
             test_mispred_info.append({
                 'test_idx': test_idx,
                 'path': img_path,
-                'true_label': row['true_class_index'],
-                'pred_label': row['pred_class_index'],
-                'true_class': class_names[row['true_class_index']],
-                'pred_class': class_names[row['pred_class_index']]
+                'true_label': row['true'],
+                'pred_label': row['pred'],
+                'true_class': class_names[row['true']],
+                'pred_class': class_names[row['pred']]
             })
     
     # Extract influence scores for mispredicted test images
@@ -190,6 +210,7 @@ def main():
     
     # Save analysis
     output_path = results_dir / 'misprediction_influence_analysis.csv'
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     df_mispred_influences.to_csv(output_path, index=False)
     
     # Part 3: Cross-analysis (error propagation)
@@ -221,17 +242,12 @@ def main():
         same_error_pct = 100 * same_error_count / len(cross_matches)
         
         if same_error_pct > 50:
-            print(f"[WARN] High error propagation detected ({same_error_pct:.1f}%)")
-            print(f"       Same error pattern in {same_error_count}/{len(cross_matches)} cross-matches")
+            print(f"[WARN] High error propagation: {same_error_pct:.1f}% ({same_error_count}/{len(cross_matches)} matches)")
         
         cross_output = results_dir / 'misprediction_cross_analysis.csv'
         df_cross.to_csv(cross_output, index=False)
     
-    print(f"\n[DONE] Analysis complete")
-    print(f"       Results saved to:")
-    print(f"       - misprediction_influence_analysis.csv")
-    if cross_matches:
-        print(f"       - misprediction_cross_analysis.csv")
+    print(f"[DONE] Results saved to {results_dir}/")
 
 if __name__ == '__main__':
     main()

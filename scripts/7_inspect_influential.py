@@ -146,41 +146,67 @@ class TopInfluenceInspector:
 
 
 def main():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent / 'utils'))
+    from version_manager import VersionManager
+    
     parser = argparse.ArgumentParser(description='Inspect top influential training images')
+    parser.add_argument('--version', type=int, help='Model version number')
+    parser.add_argument('--results_dir', type=str, help='Results directory (overrides version)')
     parser.add_argument('--top_n', type=int, default=20, help='Number of top images to show')
-    parser.add_argument('--output_helpful', type=str, default='outputs/inspection/top_helpful_images.png',
-                       help='Output path for helpful images')
-    parser.add_argument('--output_harmful', type=str, default='outputs/inspection/top_harmful_images.png',
-                       help='Output path for harmful images')
+    parser.add_argument('--output_helpful', type=str, help='Output path for helpful images')
+    parser.add_argument('--output_harmful', type=str, help='Output path for harmful images')
     
     args = parser.parse_args()
     
-    print("[INFO] Analyzing top influential training images...")
+    script_dir = Path(__file__).parent.parent
     
-    inspector = TopInfluenceInspector()
+    if args.results_dir:
+        results_dir = args.results_dir
+        helpful_path = args.output_helpful if args.output_helpful else 'outputs/inspection/top_helpful_images.png'
+        harmful_path = args.output_harmful if args.output_harmful else 'outputs/inspection/top_harmful_images.png'
+    elif args.version:
+        results_dir = f'outputs/v{args.version}/influence_analysis'
+        helpful_path = args.output_helpful if args.output_helpful else f'outputs/v{args.version}/inspection/top_helpful_images.png'
+        harmful_path = args.output_harmful if args.output_harmful else f'outputs/v{args.version}/inspection/top_harmful_images.png'
+    else:
+        vm = VersionManager(script_dir)
+        latest = vm.get_latest_version()
+        if latest is None:
+            print("[ERROR] No trained models found. Use --version or train a model first.")
+            return
+        results_dir = f'outputs/v{latest}/influence_analysis'
+        helpful_path = args.output_helpful if args.output_helpful else f'outputs/v{latest}/inspection/top_helpful_images.png'
+        harmful_path = args.output_harmful if args.output_harmful else f'outputs/v{latest}/inspection/top_harmful_images.png'
+        print(f"[VERSION] Using latest model: v{latest}")
+    
+    print(f"[INFO] Analyzing top influential images")
+    
+    inspector = TopInfluenceInspector(results_dir=results_dir)
     helpful_df = inspector.get_top_helpful(n=args.top_n)
     harmful_df = inspector.get_top_harmful(n=args.top_n)
     
     inspector.print_influence_report(helpful_df, harmful_df)
     
-    print(f"[INFO] Generating visualizations...")
+    # Ensure output directories exist
+    Path(helpful_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(harmful_path).parent.mkdir(parents=True, exist_ok=True)
+    
     inspector.visualize_influences(
         helpful_df,
         f'Top {args.top_n} Most Helpful Training Images\n(Highest Positive Influence)',
-        args.output_helpful,
+        helpful_path,
         metric='max_influence'
     )
     
     inspector.visualize_influences(
         harmful_df,
         f'Top {args.top_n} Least Influential Training Images\n(Lowest Influence)',
-        args.output_harmful,
+        harmful_path,
         metric='min_influence'
     )
     
-    print(f"\n[DONE] Outputs saved:")
-    print(f"       - {args.output_helpful}")
-    print(f"       - {args.output_harmful}")
+    print(f"[DONE] Saved to {Path(helpful_path).parent}/")
 
 
 if __name__ == '__main__':

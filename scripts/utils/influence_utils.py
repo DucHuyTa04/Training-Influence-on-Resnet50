@@ -45,12 +45,8 @@ class InfluenceHook:
             self.backward_handle.remove()
     
     def get_influence_features(self) -> torch.Tensor:
-        """
-        Compute the influence feature vector: a ⊗ δ (outer product flattened).
-        
-        Returns:
-            Tensor of shape [batch_size, features_in * features_out]
-        """
+        """Compute the influence feature vector: a ⊗ δ (outer product flattened)."""
+
         if self.activations is None or self.error_signals is None:
             raise RuntimeError("Must run forward and backward pass before getting features")
         
@@ -73,17 +69,7 @@ def compute_ghost_influence_batch(
     test_features: torch.Tensor,
     learning_rate: float = 1.0
 ) -> torch.Tensor:
-    """
-    Compute influence scores using ghost dot-product.
-    
-    Args:
-        train_features: [num_train, feature_dim]
-        test_features: [num_test, feature_dim]
-        learning_rate: Scaling factor
-    
-    Returns:
-        influence_scores: [num_train, num_test]
-    """
+    """Compute influence scores using ghost dot-product."""
     return learning_rate * torch.mm(train_features, test_features.t())
 
 
@@ -92,17 +78,7 @@ def select_top_k_influences(
     k: int,
     return_indices: bool = True
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Select top-K most influential training samples for each test sample.
-    
-    Args:
-        influences: [num_train, num_test] influence matrix
-        k: Number of top influences to keep per test sample
-    
-    Returns:
-        top_k_values: [num_test, k]
-        top_k_indices: [num_test, k]
-    """
+    """Select top-K most influential training samples for each test sample."""
     top_k_values, top_k_indices = torch.topk(
         influences,
         k=min(k, influences.size(0)),
@@ -118,17 +94,7 @@ def merge_top_k_tiles(
     tiles: List[Tuple[torch.Tensor, torch.Tensor]],
     k: int
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Merge top-K results from multiple tiles to get global top-K.
-    
-    Args:
-        tiles: List of (values, indices) tuples, each of shape [num_test, k_tile]
-        k: Final number of top influences to keep
-    
-    Returns:
-        final_values: [num_test, k]
-        final_indices: [num_test, k]
-    """
+    """Merge top-K results from multiple tiles to get global top-K."""
     if len(tiles) == 0:
         raise ValueError("No tiles to merge")
     
@@ -152,9 +118,7 @@ def merge_top_k_tiles(
 
 
 class TopKInfluenceTracker:
-    """
-    Efficiently track top-K influences across multiple training batches using tile-and-stitch.
-    """
+    """Efficiently track top-K influences across multiple training batches using tile-and-stitch."""
     
     def __init__(self, k: int, num_test: int, device: torch.device):
         self.k = k

@@ -32,7 +32,6 @@ class MislabeledInspector:
         # Load class names
         train_dir = self.data_dir / 'train'
         self.class_names = sorted([d.name for d in train_dir.iterdir() if d.is_dir()])
-        print(f"Classes: {', '.join(self.class_names)}")
         
         # Load datasets
         self.train_images = []
@@ -43,17 +42,13 @@ class MislabeledInspector:
             self.train_images.extend(images)
             self.train_labels.extend([class_idx] * len(images))
         
-        print(f"Loaded {len(self.train_images)} training images")
-        
-        # Load mispredictions
-        false_pred_path = 'outputs/mispredictions/false_predictions.csv'
+        # Load mispredictions (version-aware path)
+        false_pred_path = self.results_dir.parent / 'mispredictions' / 'false_predictions.csv'
         self.false_preds = pd.read_csv(false_pred_path)
-        print(f"Loaded {len(self.false_preds)} mispredictions")
         
         # Load influence cross-analysis
         cross_analysis_path = self.results_dir / 'misprediction_cross_analysis.csv'
         self.cross_analysis = pd.read_csv(cross_analysis_path)
-        print(f"Loaded {len(self.cross_analysis)} cross-analysis records\n")
     
     def find_top_mislabeled_candidates(self, top_n=20):
         """
@@ -102,10 +97,10 @@ class MislabeledInspector:
         pred_map = {}
         for _, row in train_false_preds.iterrows():
             # Match by filename
-            path = Path(row['image_path'])
+            path = Path(row['path'])
             for idx, img_path in enumerate(self.train_images):
                 if img_path.name == path.name:
-                    pred_map[idx] = row['pred_class_index']
+                    pred_map[idx] = row['pred']
                     break
         
         top_candidates['pred_label'] = top_candidates['train_idx'].apply(
@@ -186,29 +181,54 @@ class MislabeledInspector:
 
 
 def main():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent / 'utils'))
+    from version_manager import VersionManager
+    
     parser = argparse.ArgumentParser(description='Inspect potentially mislabeled training images')
+    parser.add_argument('--version', type=int, help='Model version number')
+    parser.add_argument('--results_dir', type=str, help='Results directory (overrides version)')
     parser.add_argument('--top_n', type=int, default=20, help='Number of top candidates to inspect')
     parser.add_argument('--threshold', type=int, default=1000, help='High-priority threshold')
-    parser.add_argument('--output', type=str, default='outputs/inspection/mislabeled_candidates.png', 
-                       help='Output image path')
+    parser.add_argument('--output', type=str, help='Output image path (overrides version)')
     
     args = parser.parse_args()
     
-    print("[INFO] Analyzing mislabeled training image candidates...")
+    script_dir = Path(__file__).parent.parent
     
-    inspector = MislabeledInspector()
+    if args.results_dir:
+        results_dir = args.results_dir
+        output_path = args.output if args.output else 'outputs/inspection/mislabeled_candidates.png'
+    elif args.version:
+        results_dir = f'outputs/v{args.version}/influence_analysis'
+        output_path = args.output if args.output else f'outputs/v{args.version}/inspection/mislabeled_candidates.png'
+    else:
+        vm = VersionManager(script_dir)
+        latest = vm.get_latest_version()
+        if latest is None:
+            print("[ERROR] No trained models found. Use --version or train a model first.")
+            return
+        results_dir = f'outputs/v{latest}/influence_analysis'
+        output_path = args.output if args.output else f'outputs/v{latest}/inspection/mislabeled_candidates.png'
+        print(f"[VERSION] Using latest model: v{latest}")
+    
+    print(f"[INFO] Analyzing mislabeled candidates")
+    
+    inspector = MislabeledInspector(results_dir=results_dir)
     candidates = inspector.find_top_mislabeled_candidates(top_n=args.top_n)
     
     inspector.print_detailed_report(candidates)
-    inspector.visualize_mislabeled_grid(candidates, save_path=args.output)
     
-    # Always save report CSV
-    report_path = 'outputs/inspection/mislabeled_inspection_report.csv'
+    # Ensure output directory exists
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    inspector.visualize_mislabeled_grid(candidates, save_path=output_path)
+    
+    report_dir = Path(output_path).parent
+    report_path = report_dir / 'mislabeled_inspection_report.csv'
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     candidates.to_csv(report_path, index=False)
     
-    print(f"\n[DONE] Outputs saved:")
-    print(f"       - {args.output}")
-    print(f"       - {report_path}")
+    print(f"[DONE] Saved to {output_path}")
 
 
 if __name__ == '__main__':

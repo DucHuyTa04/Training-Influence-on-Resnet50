@@ -2,6 +2,8 @@
 Analyzes the top-K most influential training samples for each test sample.
 """
 
+import argparse
+import sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -11,6 +13,9 @@ from PIL import Image
 import shutil
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+sys.path.insert(0, str(Path(__file__).parent / 'utils'))
+from version_manager import VersionManager
 
 sns.set_style("whitegrid")
 plt.rcParams['figure.facecolor'] = 'white'
@@ -23,13 +28,11 @@ class TopKAnalyzer:
         self.results_dir = script_dir / results_dir
         self.data_dir = script_dir / data_dir
         
-        print("Loading top-K TracIn results...")
         self.values = np.load(self.results_dir / 'top_k_influences_values.npy')
         self.indices = np.load(self.results_dir / 'top_k_influences_indices.npy')
         self.df = pd.read_csv(self.results_dir / 'top_k_influences.csv')
         
         self.num_test, self.k = self.values.shape
-        print(f"Loaded {self.num_test} test samples x top-{self.k} influences")
         
         self._load_dataset_info()
     
@@ -55,8 +58,6 @@ class TopKAnalyzer:
             images = sorted([f for f in class_path.glob('*') if f.suffix.lower() in ['.jpg', '.jpeg', '.png']])
             self.test_images.extend(images)
             self.test_labels.extend([class_idx] * len(images))
-        
-        print(f"Dataset: {len(self.train_images)} train, {len(self.test_images)} test, {len(self.class_names)} classes")
     
     def print_overview(self):
         """Print brief overview statistics."""
@@ -87,9 +88,10 @@ class TopKAnalyzer:
         # Decay analysis is in the report file
         pass
     
-    def save_top_influential_images(self, top_n=10, output_dir='outputs/inspection/detailed'):
+    def save_top_influential_images(self, top_n=10):
         """Save images of the most helpful and harmful training samples."""
-        output_path = Path(output_dir)
+        inspection_base = self.results_dir.parent / 'inspection'
+        output_path = inspection_base / 'detailed'
         if output_path.exists():
             shutil.rmtree(output_path)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -144,8 +146,9 @@ class TopKAnalyzer:
             
             shutil.copy2(src_path, dst_path)
     
-    def create_summary_report(self, output_file='outputs/influence_analysis/influence_report.txt'):
+    def create_summary_report(self):
         """Create a text summary report."""
+        output_file = self.results_dir / 'influence_report.txt'
         with open(output_file, 'w') as f:
             f.write("="*70 + "\n")
             f.write("TOP-K TRACIN INFLUENCE ANALYSIS REPORT\n")
@@ -179,11 +182,12 @@ class TopKAnalyzer:
             
             f.write("\n" + "="*70 + "\n")
     
-    def create_overall_dashboard(self, output_file='outputs/influence_analysis/overall_dashboard.png'):
+    def create_overall_dashboard(self):
         """Create overall influence analysis dashboard."""
+        output_file = self.results_dir / 'overall_dashboard.png'
         fig = plt.figure(figsize=(20, 12))
-        gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
-        fig.suptitle('TracIn Influence Analysis Dashboard', fontsize=20, fontweight='bold', y=0.98)
+        gs = fig.add_gridspec(3, 3, hspace=0.4, wspace=0.35)
+        fig.suptitle('TracIn Influence Analysis Dashboard', fontsize=20, fontweight='bold', y=0.99)
         
         # Compute statistics
         positive_mask = self.values >= 0
@@ -331,9 +335,9 @@ Max Influence: {most_inf_val:.6f}
         plt.savefig(output_file, dpi=150, bbox_inches='tight')
         plt.close()
     
-    def create_per_class_dashboards(self, output_dir='outputs/influence_analysis/per_class'):
+    def create_per_class_dashboards(self):
         """Create per-class influence analysis dashboards."""
-        output_path = Path(output_dir)
+        output_path = self.results_dir / 'per_class'
         output_path.mkdir(parents=True, exist_ok=True)
         
         for class_idx, class_name in enumerate(self.class_names):
@@ -349,8 +353,8 @@ Max Influence: {most_inf_val:.6f}
             
             # Create dashboard
             fig = plt.figure(figsize=(18, 10))
-            gs = fig.add_gridspec(2, 3, hspace=0.35, wspace=0.35)
-            fig.suptitle(f'Influence Analysis: {class_name.upper()}', fontsize=16, fontweight='bold')
+            gs = fig.add_gridspec(2, 3, hspace=0.4, wspace=0.4)
+            fig.suptitle(f'Influence Analysis: {class_name.upper()}', fontsize=16, fontweight='bold', y=0.98)
             
             positive_mask = class_values >= 0
             negative_mask = class_values < 0
@@ -490,36 +494,42 @@ Most Influential:
                     verticalalignment='top', family='monospace',
                     bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.3))
             
-            plt.tight_layout()
             output_file = output_path / f'{class_name}_dashboard.png'
             plt.savefig(output_file, dpi=150, bbox_inches='tight')
             plt.close()
 
 
 def main():
-    print("[INFO] Starting TracIn influence analysis...")
+    parser = argparse.ArgumentParser(description='Generate influence analysis dashboards')
+    parser.add_argument('--version', type=int, help='Model version number')
+    parser.add_argument('--results_dir', type=str, help='Results directory (overrides version)')
+    args = parser.parse_args()
     
-    analyzer = TopKAnalyzer()
-    analyzer.print_overview()
+    script_dir = Path(__file__).parent.parent
     
-    print("[INFO] Saving top influential images...")
+    if args.results_dir:
+        results_dir = args.results_dir
+    elif args.version:
+        results_dir = f'outputs/v{args.version}/influence_analysis'
+    else:
+        vm = VersionManager(script_dir)
+        latest = vm.get_latest_version()
+        if latest is None:
+            print("[ERROR] No trained models found. Use --version or train a model first.")
+            return
+        results_dir = f'outputs/v{latest}/influence_analysis'
+        print(f"[VERSION] Using latest model: v{latest}")
+    
+    print(f"[INFO] Generating dashboards for {results_dir}")
+    
+    analyzer = TopKAnalyzer(results_dir=results_dir)
+    
     analyzer.save_top_influential_images(top_n=20)
-    
-    print("[INFO] Creating summary report...")
     analyzer.create_summary_report()
-    
-    print("[INFO] Generating overall dashboard...")
     analyzer.create_overall_dashboard()
-    
-    print("[INFO] Generating per-class dashboards...")
     analyzer.create_per_class_dashboards()
     
-    print("[DONE] All outputs saved to outputs/influence_analysis/")
-    print("       - influence_report.txt (detailed statistics)")
-    print("       - overall_dashboard.png (overview visualizations)")
-    print("       - per_class/*.png (per-class dashboards)")
-    print("       - ../inspection/detailed/helpful/ (top helpful images)")
-    print("       - ../inspection/detailed/harmful/ (top harmful images)")
+    print(f"[DONE] Dashboards saved to {results_dir}/")
 
 
 if __name__ == '__main__':

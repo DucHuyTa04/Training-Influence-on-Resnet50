@@ -113,6 +113,8 @@ pip install -r requirements.txt
 
 ### Pipeline
 
+**All steps support `--version` parameter. Omit it to auto-detect the latest trained model.**
+
 ```bash
 # Step 1: Download pretrained weights
 python scripts/1_download_weights.py
@@ -124,7 +126,7 @@ python scripts/2_train.py \
   --head_epochs 5 \                  # Head-only training epochs
   --batch_size 64 \                  # Batch size
   --lr 1e-4 \                        # Learning rate
-  --checkpoint_freq 10 \             # Checkpoint frequency (epochs)
+  --checkpoint_freq 10 \             # Checkpoint frequency
   --early_stopping_patience 15 \     # Early stopping patience
   --val_split 0.2 \                  # Validation split ratio
   --seed 30                          # Random seed
@@ -136,7 +138,7 @@ python scripts/3_detect_mispredictions.py \
 
 # Step 4: Compute TracIn influence scores
 python scripts/4_compute_influence.py \
-  --version 1 \                      # Model version number
+  --version 1 \                      # Model version 
   --top_k 100 \                      # Top influences per test sample
   --batch_size 32 \                  # Batch size
   --data_dir data/processed \        # Data directory
@@ -145,15 +147,18 @@ python scripts/4_compute_influence.py \
 
 # Step 5a: Generate analysis dashboards
 python scripts/5a_generate_dashboards.py \
+  --version 1 \                                # Model version 
   --results_dir outputs/v1/influence_analysis  # Results directory
 
 # Step 5b: Cross-reference analysis
 python scripts/5b_cross_reference_analysis.py \
+  --version 1 \                                                           # Model version 
   --mispredictions_csv outputs/v1/mispredictions/false_predictions.csv \  # Mispredictions file
   --influence_dir outputs/v1/influence_analysis                           # Influence results directory
 
 # Step 6: Inspect mislabeled candidates
 python scripts/6_inspect_mislabeled.py \
+  --version 1 \                                  # Model version 
   --results_dir outputs/v1/influence_analysis \  # Results directory
   --top_n 20 \                                   # Number of top candidates to inspect
   --threshold 1000 \                             # High-priority threshold
@@ -161,6 +166,7 @@ python scripts/6_inspect_mislabeled.py \
 
 # Step 7: Inspect most influential images
 python scripts/7_inspect_influential.py \
+  --version 1 \                                      # Model version 
   --results_dir outputs/v1/influence_analysis \      # Results directory
   --top_n 20 \                                       # Number of top images to show
   --output_helpful outputs/inspection/top_helpful_images.png \  # Output for helpful images

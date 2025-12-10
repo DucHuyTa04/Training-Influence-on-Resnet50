@@ -230,17 +230,21 @@ def compute_tracin_multi_checkpoint(
         model.load_state_dict(checkpoint)
         model.eval()
         
-        metadata_path = Path(checkpoint_path).parent / 'finetune_checkpoints_metadata.json'
-        learning_rate = 1e-4
+        # Look for metadata file (training saves as 'finetune_metadata.json')
+        metadata_path = Path(checkpoint_path).parent / 'finetune_metadata.json'
+        learning_rate = 1e-4  # Default fallback
         
         if metadata_path.exists():
             with open(metadata_path) as f:
                 metadata = json.load(f)
                 for entry in metadata:
-                    if entry['checkpoint_path'] == checkpoint_path:
+                    if str(checkpoint_path) == entry['checkpoint_path'] or \
+                       Path(checkpoint_path).name == Path(entry['checkpoint_path']).name:
                         learning_rate = entry['learning_rate']
                         print(f"Learning rate: {learning_rate:.2e}")
                         break
+        else:
+            print(f"[WARN] Metadata file not found, using default LR: {learning_rate:.2e}")
         
         test_features = precompute_test_features(
             model, test_loader, hook, criterion, device
