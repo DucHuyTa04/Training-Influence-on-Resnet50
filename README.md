@@ -111,32 +111,60 @@ pip install -r requirements.txt
    jupyter notebook preprocess_data.ipynb
    ```
 
-### Basic Training Pipeline
+### Pipeline
 
 ```bash
 # Step 1: Download pretrained weights
 python scripts/1_download_weights.py
 
-# Step 2: Train model (automatically creates version 1)
-python scripts/2_train.py --num_epochs 100 --lr 1e-4
+# Step 2: Train model
+python scripts/2_train.py \
+  --version 1 \                      # Model version (auto-assigned if omitted)
+  --num_epochs 100 \                 # Fine-tuning epochs
+  --head_epochs 5 \                  # Head-only training epochs
+  --batch_size 64 \                  # Batch size
+  --lr 1e-4 \                        # Learning rate
+  --checkpoint_freq 10 \             # Checkpoint frequency (epochs)
+  --early_stopping_patience 15 \     # Early stopping patience
+  --val_split 0.2 \                  # Validation split ratio
+  --seed 30                          # Random seed
 
-# Step 3: Detect mispredictions (uses latest model)
-python scripts/3_detect_mispredictions.py
+# Step 3: Detect mispredictions
+python scripts/3_detect_mispredictions.py \
+  --version 1 \                      # Model version to evaluate
+  --model_path models/best/v1/model_v1.pth  # Or direct path to model (overrides version)
 
 # Step 4: Compute TracIn influence scores
-python scripts/4_compute_influence.py --top_k 100
+python scripts/4_compute_influence.py \
+  --version 1 \                      # Model version number
+  --top_k 100 \                      # Top influences per test sample
+  --batch_size 32 \                  # Batch size
+  --data_dir data/processed \        # Data directory
+  --train_subset None \              # Train subset (None = all)
+  --test_subset None                 # Test subset (None = all)
 
-# Step 5: Generate analysis dashboards
-python scripts/5a_generate_dashboards.py --results_dir outputs/v1/influence_analysis
+# Step 5a: Generate analysis dashboards
+python scripts/5a_generate_dashboards.py \
+  --results_dir outputs/v1/influence_analysis  # Results directory
+
+# Step 5b: Cross-reference analysis
 python scripts/5b_cross_reference_analysis.py \
-  --mispredictions_csv outputs/v1/mispredictions/false_predictions.csv \
-  --influence_dir outputs/v1/influence_analysis
+  --mispredictions_csv outputs/v1/mispredictions/false_predictions.csv \  # Mispredictions file
+  --influence_dir outputs/v1/influence_analysis                           # Influence results directory
 
 # Step 6: Inspect mislabeled candidates
-python scripts/6_inspect_mislabeled.py --results_dir outputs/v1/influence_analysis
+python scripts/6_inspect_mislabeled.py \
+  --results_dir outputs/v1/influence_analysis \  # Results directory
+  --top_n 20 \                                   # Number of top candidates to inspect
+  --threshold 1000 \                             # High-priority threshold
+  --output outputs/inspection/mislabeled_candidates.png  # Output image path
 
 # Step 7: Inspect most influential images
-python scripts/7_inspect_influential.py --results_dir outputs/v1/influence_analysis --top_n 20
+python scripts/7_inspect_influential.py \
+  --results_dir outputs/v1/influence_analysis \      # Results directory
+  --top_n 20 \                                       # Number of top images to show
+  --output_helpful outputs/inspection/top_helpful_images.png \  # Output for helpful images
+  --output_harmful outputs/inspection/top_harmful_images.png    # Output for harmful images
 ```
 
 ### SLURM Batch Jobs
@@ -213,27 +241,13 @@ The `models/version_registry.json` file tracks all trained models:
 1. **Head-only fine-tuning**: Train only final classification layer (few epochs)
 2. **Full fine-tuning**: Unfreeze all layers with small learning rate
 
-### Advanced Features
+### Features
 - **ReduceLROnPlateau**: Adaptive learning rate based on validation performance
 - **Early Stopping**: Prevent overfitting with patience mechanism
 - **Checkpoint Saving**: Save model every N epochs for TracIn
 - **Class Weighting**: Handle imbalanced classes
 - **Data Augmentation**: Random crops, flips, rotations, color jitter
 
-### Training Parameters
-
-```bash
-python scripts/2_train.py \
-  --version 1 \                      # Model version (auto-assigned if omitted)
-  --num_epochs 100 \                 # Fine-tuning epochs
-  --head_epochs 3 \                  # Head-only training epochs
-  --batch_size 64 \                  # Batch size
-  --lr 1e-4 \                        # Learning rate
-  --checkpoint_freq 10 \             # Checkpoint frequency (epochs)
-  --early_stopping_patience 15 \     # Early stopping patience
-  --val_split 0.2 \                  # Validation split ratio
-  --seed 42                          # Random seed
-```
 
 ## TracIn Methodology
 
@@ -315,14 +329,3 @@ python scripts/2_train.py
 1. **TracIn Paper**: [Estimating Training Data Influence by Tracing Gradient Descent](https://arxiv.org/abs/2002.08484)
 2. **ResNet**: [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)
 3. **Animals-10 Dataset**: [Kaggle Animals-10](https://www.kaggle.com/datasets/alessiocorrado99/animals10)
-
-## License
-
-This project is for educational and research purposes. Please cite appropriately if used in publications.
-
-## Acknowledgments
-
-- PyTorch for deep learning framework
-- TracIn authors for influence function methodology  
-- Animals-10 dataset creators for the benchmark dataset
-- ResNet authors for the foundational architecture

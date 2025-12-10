@@ -3,10 +3,6 @@ Inspect Mislabeled Images
 
 Analyzes the most likely mislabeled training images based on TracIn influence scores
 and misprediction patterns. Shows visual grids and detailed statistics.
-
-Usage:
-    python inspect_mislabeled.py --top_n 20
-    python inspect_mislabeled.py --top_n 50 --save_report
 """
 
 import os

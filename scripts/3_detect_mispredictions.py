@@ -1,4 +1,6 @@
-"""Detect model mispredictions on test and training data."""
+"""
+Detect model mispredictions on test and training data.
+"""
 
 import argparse
 import csv

@@ -1,11 +1,5 @@
 """
-TracIn Top-K Results Analysis
-
 Analyzes the top-K most influential training samples for each test sample.
-Works with the efficient Ghost Dot-Product TracIn implementation.
-
-Usage:
-    python analyze_topk_results.py
 """
 
 import numpy as np

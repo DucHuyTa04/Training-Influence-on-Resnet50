@@ -1,4 +1,6 @@
-"""Model version management for tracking multiple training runs."""
+"""
+Model version management for tracking multiple training runs.
+"""
 
 import json
 import os

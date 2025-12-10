@@ -1,13 +1,8 @@
 """
-Misprediction-Influence Analysis for TracIn
-
-Analyzes mispredictions using TracIn influence scores to identify:
+Analyzes mispredictions to identify:
 1. Potentially mislabeled training images (high influence but mispredicted)
 2. Negative influences (evidence of harmful training data)
 3. Error propagation (mislabeled training images causing test errors)
-
-Usage:
-    python analyze_misprediction_influences.py
 """
 
 import os

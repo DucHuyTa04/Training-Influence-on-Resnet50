@@ -1,4 +1,6 @@
-"""ResNet50 training script with model versioning."""
+"""
+ResNet50 training script with model versioning.
+"""
 
 import os
 import argparse
@@ -28,8 +30,11 @@ def train_epoch(model, dataloader, criterion, optimizer, scaler, device, is_trai
     running_corrects = 0
     total_samples = 0
     
+    phase = "Train" if is_training else "Val"
+    pbar = tqdm(dataloader, desc=f"{phase}", leave=False)
+    
     with torch.set_grad_enabled(is_training):
-        for inputs, labels in dataloader:
+        for inputs, labels in pbar:
             inputs, labels = inputs.to(device), labels.to(device)
             
             if is_training:
@@ -55,6 +60,10 @@ def train_epoch(model, dataloader, criterion, optimizer, scaler, device, is_trai
             running_loss += loss.item() * inputs.size(0)
             running_corrects += torch.sum(preds == labels.data)
             total_samples += inputs.size(0)
+            
+            # Update progress bar
+            current_acc = (running_corrects.float() / total_samples).item()
+            pbar.set_postfix({'loss': f'{running_loss/total_samples:.4f}', 'acc': f'{current_acc:.4f}'})
     
     epoch_loss = running_loss / total_samples
     epoch_acc = (running_corrects.float() / total_samples).item()

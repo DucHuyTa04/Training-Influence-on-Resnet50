@@ -3,11 +3,6 @@ Inspect Top Influential Images
 
 Visualizes the most and least influential training images across the dataset.
 Shows which images have the strongest positive or negative impact on test predictions.
-
-Usage:
-    python inspect_top_influences.py --top_n 20
-    python inspect_top_influences.py --helpful_only
-    python inspect_top_influences.py --show_per_class
 """
 
 import os

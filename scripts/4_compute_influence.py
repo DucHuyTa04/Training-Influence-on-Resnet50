@@ -1,4 +1,6 @@
-"""TracIn influence computation with Ghost Dot-Product optimization."""
+"""
+TracIn influence computation with Ghost Dot-Product optimization.
+"""
 
 import os
 import sys
