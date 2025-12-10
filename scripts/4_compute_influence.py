@@ -25,7 +25,8 @@ from version_manager import VersionManager
 from influence_utils import (
     InfluenceHook,
     compute_ghost_influence_batch,
-    TopKInfluenceTracker
+    TopKInfluenceTracker,
+    accumulate_influences_across_checkpoints
 )
 
 
@@ -218,8 +219,9 @@ def compute_tracin_multi_checkpoint(
     
     criterion = nn.CrossEntropyLoss(reduction='none')
     
-    aggregated_values = None
-    aggregated_indices = None
+    # Collect influences from all checkpoints
+    checkpoint_influences = []
+    
     for checkpoint_idx, checkpoint_path in enumerate(checkpoint_paths):
         print(f"\n{'='*60}")
         print(f"Processing checkpoint {checkpoint_idx + 1}/{len(checkpoint_paths)}")
@@ -255,18 +257,19 @@ def compute_tracin_multi_checkpoint(
             device, top_k, learning_rate
         )
         
-        if aggregated_values is None:
-            aggregated_values = top_k_values.cpu()
-            aggregated_indices = top_k_indices.cpu()
-        else:
-            from influence_utils import merge_top_k_tiles
-            aggregated_values, aggregated_indices = merge_top_k_tiles(
-                [(aggregated_values, aggregated_indices), 
-                 (top_k_values.cpu(), top_k_indices.cpu())],
-                k=top_k
-            )
+        # Store checkpoint influences for accumulation
+        checkpoint_influences.append((top_k_values.cpu(), top_k_indices.cpu()))
     
     hook.remove_hooks()
+    
+    # Accumulate influences across all checkpoints
+    print(f"\n{'='*60}")
+    print("Accumulating influences across checkpoints...")
+    print('='*60)
+    
+    aggregated_values, aggregated_indices = accumulate_influences_across_checkpoints(
+        checkpoint_influences, k=top_k, num_train=num_train
+    )
     
     # Save results
     os.makedirs(output_dir, exist_ok=True)
