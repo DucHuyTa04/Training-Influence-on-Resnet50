@@ -242,8 +242,12 @@ def compute_tracin_multi_checkpoint(
                 for entry in metadata:
                     if str(checkpoint_path) == entry['checkpoint_path'] or \
                        Path(checkpoint_path).name == Path(entry['checkpoint_path']).name:
-                        learning_rate = entry['learning_rate']
+                        # Use head LR if available (since we hook model.model.fc)
+                        # Fall back to backbone LR for backward compatibility
+                        learning_rate = entry.get('learning_rate_head', entry.get('learning_rate', 1e-4))
                         print(f"Learning rate: {learning_rate:.2e}")
+                        if 'learning_rate_head' in entry:
+                            print(f"  (using head LR, backbone LR was {entry['learning_rate']:.2e})")
                         break
         else:
             print(f"[WARN] Metadata file not found, using default LR: {learning_rate:.2e}")

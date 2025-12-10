@@ -130,10 +130,18 @@ def train_model(model, dataloaders, dataset_sizes, criterion, optimizer, schedul
             checkpoint_path = checkpoint_dir / f'{stage_name}_epoch_{epoch+1}.pth'
             torch.save(model.state_dict(), checkpoint_path)
             
+            # Save learning rates for all parameter groups
+            # For influence computation: use the LR of the layer being hooked (head)
+            lr_dict = {
+                'learning_rate': optimizer.param_groups[0]['lr'],  # Backbone or single LR
+            }
+            if len(optimizer.param_groups) > 1:
+                lr_dict['learning_rate_head'] = optimizer.param_groups[1]['lr']  # Head LR
+            
             checkpoint_metadata.append({
                 'epoch': epoch + 1,
                 'checkpoint_path': str(checkpoint_path),
-                'learning_rate': optimizer.param_groups[0]['lr'],
+                **lr_dict,  # Unpack learning rate(s)
                 'val_loss': history['val_loss'][-1],
                 'val_acc': history['val_acc'][-1],
                 'stage': stage_name
