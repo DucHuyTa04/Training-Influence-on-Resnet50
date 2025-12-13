@@ -9,10 +9,6 @@ This script executes steps 3-7 of the pipeline in sequence:
   5b. Cross-reference analysis
   6. Inspect mislabeled candidates
   7. Inspect influential samples
-
-Usage:
-    python scripts/run_full_pipeline.py --version 1
-    python scripts/run_full_pipeline.py --version 1 --top_k 50 --batch_size 16
 """
 
 import argparse
