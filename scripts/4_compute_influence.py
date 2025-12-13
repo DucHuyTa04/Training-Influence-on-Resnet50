@@ -84,17 +84,22 @@ def compute_influence_features_batch(
     labels: torch.Tensor,
     criterion: nn.Module,
     device: torch.device
-) -> torch.Tensor:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Compute influence features for a batch using ghost dot-product.
+    Compute influence features for a batch using Ghost Dot-Product.
+    
+    Returns activations and error signals separately to enable the
+    Ghost Dot-Product optimization: <uv^T, u'v'^T> = <u, u'> * <v, v'>
     
     Returns:
-        influence_features: [batch_size, feature_dim]
+        activations: [batch_size, in_features] - input to target layer
+        error_signals: [batch_size, out_features] - gradient w.r.t. layer output
     """
     inputs = inputs.to(device, non_blocking=True)
     labels = labels.to(device, non_blocking=True)
     
-    batch_features = []
+    batch_activations = []
+    batch_errors = []
     
     for i in range(len(inputs)):
         model.zero_grad()
@@ -107,10 +112,11 @@ def compute_influence_features_batch(
         loss = criterion(output, single_label)
         loss.backward()
         
-        features = hook.get_influence_features()
-        batch_features.append(features)
+        activations, errors = hook.get_activations_and_errors()
+        batch_activations.append(activations)
+        batch_errors.append(errors)
     
-    return torch.cat(batch_features, dim=0)
+    return torch.cat(batch_activations, dim=0), torch.cat(batch_errors, dim=0)
 
 
 def precompute_test_features(
@@ -119,31 +125,37 @@ def precompute_test_features(
     hook: InfluenceHook,
     criterion: nn.Module,
     device: torch.device
-) -> torch.Tensor:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Precompute influence features for all test samples.
     
+    Returns activations and error signals separately for Ghost Dot-Product.
+    
     Returns:
-        test_features: [num_test, feature_dim]
+        test_activations: [num_test, in_features]
+        test_errors: [num_test, out_features]
     """
     model.eval()
-    all_test_features = []
+    all_test_activations = []
+    all_test_errors = []
     
     print("[COMPUTE] Precomputing test influence features...")
     for inputs, labels in tqdm(test_loader, desc="Test features", leave=False):
         with torch.set_grad_enabled(True):  # Need gradients for backward
-            features = compute_influence_features_batch(
+            activations, errors = compute_influence_features_batch(
                 model, hook, inputs, labels, criterion, device
             )
-            all_test_features.append(features.cpu())
+            all_test_activations.append(activations.cpu())
+            all_test_errors.append(errors.cpu())
     
-    return torch.cat(all_test_features, dim=0)
+    return torch.cat(all_test_activations, dim=0), torch.cat(all_test_errors, dim=0)
 
 
 def compute_top_k_influences_single_checkpoint(
     model: nn.Module,
     train_loader: DataLoader,
-    test_features: torch.Tensor,
+    test_activations: torch.Tensor,
+    test_errors: torch.Tensor,
     hook: InfluenceHook,
     criterion: nn.Module,
     device: torch.device,
@@ -151,15 +163,19 @@ def compute_top_k_influences_single_checkpoint(
     learning_rate: float = 1.0
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Compute top-K influences using tile-and-stitch approach.
+    Compute top-K influences using tile-and-stitch approach with Ghost Dot-Product.
+    
+    Uses the identity: <uv^T, u'v'^T> = <u, u'> * <v, v'>
+    to compute gradient dot products without materializing full gradients.
     
     Returns:
         top_k_values: [num_test, top_k]
         top_k_indices: [num_test, top_k]
     """
     model.eval()
-    num_test = test_features.size(0)
-    test_features = test_features.to(device)
+    num_test = test_activations.size(0)
+    test_activations = test_activations.to(device)
+    test_errors = test_errors.to(device)
     
     tracker = TopKInfluenceTracker(k=top_k, num_test=num_test, device=device)
     
@@ -167,12 +183,15 @@ def compute_top_k_influences_single_checkpoint(
     
     for inputs, labels in tqdm(train_loader, desc="Train batches", leave=False):
         with torch.set_grad_enabled(True):
-            train_features = compute_influence_features_batch(
+            train_activations, train_errors = compute_influence_features_batch(
                 model, hook, inputs, labels, criterion, device
             )
             
+            # True Ghost Dot-Product: influence = lr * (a_train · a_test) * (δ_train · δ_test)
             influences = compute_ghost_influence_batch(
-                train_features, test_features, learning_rate
+                train_activations, train_errors,
+                test_activations, test_errors,
+                learning_rate
             )
             
             tracker.add_tile(influences, train_batch_size=len(inputs))
@@ -213,11 +232,27 @@ def compute_tracin_multi_checkpoint(
     model = ResNet50_Animals10(num_animal_classes=10, pretrained=False)
     model = model.to(device)
     
-    target_layer = model.model.fc
+    # Hook the FINAL Linear layer of the classifier head
+    # model.model.fc is a Sequential: [Linear(2048,512), LeakyReLU, Linear(512,256), LeakyReLU, Linear(256,10)]
+    # We want the last Linear layer (index -1) for proper Ghost Dot-Product
+    target_layer = model.model.fc[-1]  # Final Linear(256, 10)
     hook = InfluenceHook(target_layer)
     hook.register_hooks()
     
-    criterion = nn.CrossEntropyLoss(reduction='none')
+    # Use the SAME loss function as training for theoretical correctness
+    # Training uses class weights and label smoothing
+    # Compute class weights based on training data distribution
+    train_dir = Path(data_dir) / 'train'
+    class_names = sorted([d.name for d in train_dir.iterdir() if d.is_dir()])
+    counts = np.array([len(list((train_dir / c).glob('*'))) for c in class_names])
+    class_weights = torch.tensor(
+        counts.sum() / (len(class_names) * counts),
+        dtype=torch.float32
+    ).to(device)
+    
+    # Match training loss: CrossEntropyLoss with class weights and label smoothing
+    # Note: We use reduction='mean' here since we compute per-sample gradients
+    criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
     
     # Collect influences from all checkpoints
     checkpoint_influences = []
@@ -242,22 +277,30 @@ def compute_tracin_multi_checkpoint(
                 for entry in metadata:
                     if str(checkpoint_path) == entry['checkpoint_path'] or \
                        Path(checkpoint_path).name == Path(entry['checkpoint_path']).name:
-                        # Use head LR if available (since we hook model.model.fc)
-                        # Fall back to backbone LR for backward compatibility
-                        learning_rate = entry.get('learning_rate_head', entry.get('learning_rate', 1e-4))
-                        print(f"Learning rate: {learning_rate:.2e}")
+                        # Use head LR if available (since we hook the final FC layer)
+                        # The head LR is typically 2x the base LR in training
                         if 'learning_rate_head' in entry:
-                            print(f"  (using head LR, backbone LR was {entry['learning_rate']:.2e})")
+                            learning_rate = entry['learning_rate_head']
+                            print(f"Learning rate (head): {learning_rate:.2e}")
+                        else:
+                            # Backward compatibility: for older checkpoints without learning_rate_head,
+                            # the stored learning_rate is the backbone LR.
+                            # Head LR was 2x base LR in training, so estimate it
+                            base_lr = entry.get('learning_rate', 1e-4)
+                            learning_rate = base_lr * 2  # Head was trained with 2x LR
+                            print(f"Learning rate (estimated head LR): {learning_rate:.2e}")
+                            print(f"  (backbone LR was {base_lr:.2e}, head LR = 2x backbone)")
                         break
         else:
             print(f"[WARN] Metadata file not found, using default LR: {learning_rate:.2e}")
         
-        test_features = precompute_test_features(
+        # Precompute test features (activations and error signals)
+        test_activations, test_errors = precompute_test_features(
             model, test_loader, hook, criterion, device
         )
         
         top_k_values, top_k_indices = compute_top_k_influences_single_checkpoint(
-            model, train_loader, test_features, hook, criterion,
+            model, train_loader, test_activations, test_errors, hook, criterion,
             device, top_k, learning_rate
         )
         
@@ -315,22 +358,58 @@ def create_results_dataframe(
     test_dataset: Dataset,
     train_dataset: Dataset
 ) -> pd.DataFrame:
-    """Create a readable DataFrame from top-K results."""
+    """Create a readable DataFrame from top-K results with class information."""
     
     num_test, k = values.shape
     
+    # Get class names from the underlying dataset
+    if hasattr(train_dataset, 'dataset'):
+        # It's a Subset
+        base_train = train_dataset.dataset
+        train_indices = train_dataset.indices
+    else:
+        base_train = train_dataset
+        train_indices = None
+    
+    if hasattr(test_dataset, 'dataset'):
+        base_test = test_dataset.dataset
+        test_indices = test_dataset.indices
+    else:
+        base_test = test_dataset
+        test_indices = None
+    
+    class_names = base_train.classes if hasattr(base_train, 'classes') else None
+    
     rows = []
     for test_idx in range(num_test):
+        # Get actual test index if using subset
+        actual_test_idx = test_indices[test_idx] if test_indices is not None else test_idx
+        test_label = base_test.targets[actual_test_idx] if hasattr(base_test, 'targets') else None
+        test_class = class_names[test_label] if class_names and test_label is not None else None
+        
         for rank in range(k):
-            train_idx = indices[test_idx, rank]
-            influence = values[test_idx, rank]
+            train_idx = int(indices[test_idx, rank])
+            influence = float(values[test_idx, rank])
             
-            rows.append({
+            # Get train label if using subset
+            if train_indices is not None:
+                actual_train_idx = train_indices[train_idx] if train_idx < len(train_indices) else train_idx
+            else:
+                actual_train_idx = train_idx
+            
+            train_label = base_train.targets[actual_train_idx] if hasattr(base_train, 'targets') and actual_train_idx < len(base_train.targets) else None
+            train_class = class_names[train_label] if class_names and train_label is not None else None
+            
+            row = {
                 'test_idx': test_idx,
+                'test_class': test_class,
                 'rank': rank + 1,
-                'train_idx': int(train_idx),
-                'influence': float(influence)
-            })
+                'train_idx': train_idx,
+                'train_class': train_class,
+                'influence': influence,
+                'influence_type': 'proponent' if influence > 0 else 'opponent'
+            }
+            rows.append(row)
     
     return pd.DataFrame(rows)
 

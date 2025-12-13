@@ -1,7 +1,10 @@
 """
 Utility functions for efficient TracIn influence computation.
 
-Implements Ghost Dot-Product and Top-K selection.
+Implements Ghost Dot-Product optimization and Top-K selection.
+    
+This allows computing gradient dot products without materializing 
+the full gradient matrices, significantly reducing memory usage.
 """
 
 import torch
@@ -14,8 +17,12 @@ class InfluenceHook:
     """
     Hook to capture activations and error signals for Ghost Dot-Product.
     
-    Captures activations (a) during forward pass and error signals (δ) during backward pass
-    to compute influence = lr * dot(a_train * δ_train, a_test * δ_test).
+    Captures activations (a) during forward pass and error signals (δ) during backward pass.
+    
+    For a linear layer W, the gradient is: ∂L/∂W = δ · a^T (outer product)
+    
+    Ghost Dot-Product computes <∂L/∂W_i, ∂L/∂W_j> = (δ_i · δ_j) * (a_i · a_j)
+    without materializing the full gradient matrices.
     """
     
     def __init__(self, target_layer: nn.Module):
@@ -29,9 +36,11 @@ class InfluenceHook:
         """Register forward and backward hooks on the target layer."""
         
         def forward_hook(module, input, output):
+            # Activations: input to the layer [batch, in_features]
             self.activations = input[0].detach()
         
         def backward_hook(module, grad_input, grad_output):
+            # Error signals: gradient w.r.t. layer output [batch, out_features]
             self.error_signals = grad_output[0].detach()
         
         self.forward_handle = self.target_layer.register_forward_hook(forward_hook)
@@ -44,38 +53,59 @@ class InfluenceHook:
         if self.backward_handle is not None:
             self.backward_handle.remove()
     
-    def get_influence_features(self) -> torch.Tensor:
-        """Compute the influence feature vector: a ⊗ δ (outer product flattened)."""
-
+    def get_activations_and_errors(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return activations and error signals separately for Ghost Dot-Product.
+        
+        Returns:
+            activations: [batch_size, in_features] - input to the layer
+            error_signals: [batch_size, out_features] - gradient w.r.t. output
+        """
         if self.activations is None or self.error_signals is None:
             raise RuntimeError("Must run forward and backward pass before getting features")
         
-        batch_size = self.activations.size(0)
-        
-        influence_features = torch.bmm(
-            self.activations.unsqueeze(2),
-            self.error_signals.unsqueeze(1)
-        )
-        
-        return influence_features.view(batch_size, -1)
+        return self.activations, self.error_signals
     
     def clear(self):
+        """Clear stored activations and error signals."""
         self.activations = None
         self.error_signals = None
 
 
 def compute_ghost_influence_batch(
-    train_features: torch.Tensor,
-    test_features: torch.Tensor,
+    train_activations: torch.Tensor,
+    train_errors: torch.Tensor,
+    test_activations: torch.Tensor,
+    test_errors: torch.Tensor,
     learning_rate: float = 1.0
 ) -> torch.Tensor:
-    """Compute influence scores using ghost dot-product.
-    
-    Returns positive influence for proponents (helpful) and negative for opponents (harmful).
-    We negate because gradients point in direction of loss increase.
-    TracIn measures loss REDUCTION, so we flip the sign.
     """
-    return -learning_rate * torch.mm(train_features, test_features.t())
+    Compute influence scores using Ghost Dot-Product optimization.
+    
+    The gradient of loss w.r.t. weight matrix W is: ∂L/∂W = δ · a^T
+    
+    The dot product of two such gradients can be computed as:
+        <∂L/∂W_train, ∂L/∂W_test> = <δ_train · a_train^T, δ_test · a_test^T>
+                                   = (δ_train · δ_test) * (a_train · a_test)
+    
+    This is the Ghost Dot-Product identity: <uv^T, u'v'^T> = <u, u'> * <v, v'>
+    
+    TracIn formula: influence = η * ∇L(z_train) · ∇L(z_test)
+    
+    Positive influence means the training sample HELPS (reduces loss on test sample).
+    Negative influence means the training sample HURTS (increases loss on test sample).
+    """
+    # Compute dot products separately using the Ghost Dot-Product identity
+    # activation_dots[i, j] = a_train[i] · a_test[j]
+    activation_dots = torch.mm(train_activations, test_activations.t())  # [N_train, N_test]
+    
+    # error_dots[i, j] = δ_train[i] · δ_test[j]
+    error_dots = torch.mm(train_errors, test_errors.t())  # [N_train, N_test]
+    
+    # Ghost Dot-Product: <∂L/∂W_train, ∂L/∂W_test> = activation_dots * error_dots
+    # TracIn: influence = η * gradient_dot_product
+    # Positive dot product = gradients align = training helps reduce test loss = positive influence
+    return learning_rate * activation_dots * error_dots
 
 
 def select_top_k_influences(

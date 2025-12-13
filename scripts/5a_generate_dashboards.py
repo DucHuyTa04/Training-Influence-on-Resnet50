@@ -195,6 +195,11 @@ class TopKAnalyzer:
         positive_values = self.values[positive_mask]
         negative_values = self.values[negative_mask]
         
+        # Calculate actual health score: % of test samples with net positive average influence
+        avg_per_test = self.values.mean(axis=1)
+        tests_with_positive_avg = (avg_per_test > 0).sum()
+        health_score = (tests_with_positive_avg / self.num_test * 100) if self.num_test > 0 else 0
+        
         # Top-left: Overview statistics
         ax1 = fig.add_subplot(gs[0, 0])
         ax1.axis('off')
@@ -214,8 +219,8 @@ Influence Range:
   • Avg negative: {negative_values.mean() if len(negative_values) > 0 else 0:.6f}
 
 Overall Health:
-  • Tests with positive avg: {self.num_test} / {self.num_test}
-  • Health score: 100.0%"""
+  • Tests with positive avg: {tests_with_positive_avg} / {self.num_test}
+  • Health score: {health_score:.1f}%"""
         
         ax1.text(0.05, 0.95, stats_text, transform=ax1.transAxes,
                 fontsize=9, verticalalignment='top', family='monospace',
@@ -295,8 +300,14 @@ Overall Health:
         if len(top_helpful) > 0:
             y_pos = range(len(top_helpful))
             labels = [f'Train #{idx}' for idx, _ in top_helpful]
-            values = [val for _, val in top_helpful]
-            ax6.barh(y_pos, values, color='green', alpha=0.7, edgecolor='black')
+            values = [count for _, count in top_helpful]
+            bars = ax6.barh(y_pos, values, color='green', alpha=0.7, edgecolor='black')
+            
+            # Add count labels on the bars
+            for i, (bar, count) in enumerate(zip(bars, values)):
+                ax6.text(bar.get_width(), bar.get_y() + bar.get_height()/2,
+                        f' {count}', va='center', ha='left', fontsize=8, fontweight='bold')
+            
             ax6.set_yticks(y_pos)
             ax6.set_yticklabels(labels, fontsize=8)
             ax6.set_xlabel('Max Influence', fontsize=9)
@@ -308,20 +319,38 @@ Overall Health:
         ax7 = fig.add_subplot(gs[2, 2])
         ax7.axis('off')
         
-        health_pct = 100.0 if self.num_test > 0 else 0
-        status = "EXCELLENT"
-        color = 'lightgreen'
+        # Use calculated health score
+        if health_score > 90:
+            status = "EXCELLENT"
+            color = 'lightgreen'
+        elif health_score > 70:
+            status = "GOOD"
+            color = 'lightgreen'
+        elif health_score > 50:
+            status = "FAIR"
+            color = 'yellow'
+        else:
+            status = "POOR"
+            color = 'lightcoral'
+        
+        health_pct = health_score
         
         most_inf_id = top_helpful[0][0] if len(top_helpful) > 0 else 'N/A'
         most_inf_val = top_helpful[0][1] if len(top_helpful) > 0 else 0
+        
+        quality_status = {
+            'EXCELLENT': 'High quality data',
+            'GOOD': 'Good quality data', 
+            'FAIR': 'Review recommended',
+            'POOR': 'Cleanup required'
+        }.get(status, 'Unknown')
         
         findings = f"""KEY FINDINGS
 {'='*35}
 
 Health: {status} ({health_pct:.1f}% positive)
 
-Quality is good
-No issues detected
+{quality_status}
 
 Most Influential: Train #{most_inf_id}
 Max Influence: {most_inf_val:.6f}
@@ -425,7 +454,13 @@ Max Influence: {most_inf_val:.6f}
                 y_pos = range(len(top_10_helpful))
                 labels = [f'Train #{idx}' for idx, _ in top_10_helpful]
                 values = [count for _, count in top_10_helpful]
-                ax4.barh(y_pos, values, color='green', alpha=0.7, edgecolor='black')
+                bars = ax4.barh(y_pos, values, color='green', alpha=0.7, edgecolor='black')
+                
+                # Add count labels on the bars
+                for i, (bar, count) in enumerate(zip(bars, values)):
+                    ax4.text(bar.get_width(), bar.get_y() + bar.get_height()/2,
+                            f' {count}', va='center', ha='left', fontsize=8, fontweight='bold')
+                
                 ax4.set_yticks(y_pos)
                 ax4.set_yticklabels(labels, fontsize=8)
                 ax4.set_xlabel('Frequency in Top Positive')
@@ -446,7 +481,13 @@ Max Influence: {most_inf_val:.6f}
                 y_pos = range(len(top_10_harmful))
                 labels = [f'Train #{idx}' for idx, _ in top_10_harmful]
                 values = [count for _, count in top_10_harmful]
-                ax5.barh(y_pos, values, color='red', alpha=0.7, edgecolor='black')
+                bars = ax5.barh(y_pos, values, color='red', alpha=0.7, edgecolor='black')
+                
+                # Add count labels on the bars
+                for i, (bar, count) in enumerate(zip(bars, values)):
+                    ax5.text(bar.get_width(), bar.get_y() + bar.get_height()/2,
+                            f' {count}', va='center', ha='left', fontsize=8, fontweight='bold')
+                
                 ax5.set_yticks(y_pos)
                 ax5.set_yticklabels(labels, fontsize=8)
                 ax5.set_xlabel('Frequency in Top Negative')

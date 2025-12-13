@@ -1,6 +1,6 @@
 # Training Influence Analysis on ResNet50
 
-A comprehensive pipeline for training ResNet50 on the Animals-10 dataset and using TracIn (Training Data Attribution using Influence Functions) to identify mislabeled images through influence analysis.
+A comprehensive pipeline for training ResNet50 on the Animals-10 dataset and using TracIn (TRACing training INfluence) to identify mislabeled images through influence analysis.
 
 ## Project Overview
 
@@ -28,6 +28,7 @@ Training-Influence-on-Resnet50/
 │   ├── 5b_cross_reference_analysis.py # Cross-reference mispredictions with influences
 │   ├── 6_inspect_mislabeled.py      # Generate visual inspection grid for mislabeled candidates
 │   ├── 7_inspect_influential.py     # Find and visualize most helpful/harmful training images
+│   ├── run_full_pipeline.py         # Run complete analysis pipeline (steps 3-7)
 │   └── utils/                       # Shared utilities
 │       ├── model_architecture.py    # ResNet50 model definition
 │       ├── version_manager.py       # Model versioning system
@@ -173,6 +174,20 @@ python scripts/7_inspect_influential.py \
   --output_harmful outputs/inspection/top_harmful_images.png    # Output for harmful images
 ```
 
+### Quick Pipeline (Recommended)
+
+After training, run the complete analysis pipeline with a single command:
+
+```bash
+# Run full analysis pipeline for a trained model
+python scripts/run_full_pipeline.py \
+  --version 1 \                      # Model version to analyze
+  --top_k 50 \                       # Top influences per test sample
+  --batch_size 16 \                  # Batch size for influence computation
+  --top_n 20                         # Number of top samples to inspect
+  --skip_influence                   # Skip step 4 (use existing influence results)  
+```
+
 ### SLURM Batch Jobs
 
 ```bash
@@ -265,14 +280,15 @@ The `models/version_registry.json` file tracks all trained models:
    - Test sample gradient: ∇L(θ, x_test)
    - Training sample gradients: ∇L(θ, x_train_i)
 
-2. **Influence Score**: 
+2. **Influence Score** (TracInCP formula with learning rate scaling):
    ```
-   Influence(x_train_i, x_test) = Σ_checkpoints ∇L(θ, x_train_i) · ∇L(θ, x_test)
+   Influence(x_train_i, x_test) = Σ_checkpoints η_i * ∇L(θ_i, x_train_i) · ∇L(θ_i, x_test)
    ```
+   where η_i is the learning rate at checkpoint i.
 
 3. **Interpretation**:
-   - **Positive influence**: Training sample helped correct prediction
-   - **Negative influence**: Training sample pushed toward wrong prediction
+   - **Positive influence**: Training sample helped correct prediction (gradients align)
+   - **Negative influence**: Training sample pushed toward wrong prediction (gradients oppose)
 
 ### Mislabel Detection Strategy
 
@@ -282,11 +298,12 @@ For mispredicted test images:
 
 ### Efficient Implementation
 
-- **Ghost Dot-Product**: Memory-efficient gradient computation
-- **Top-K Selection**: Track only most influential training samples
+- **True Ghost Dot-Product**: Uses the identity `<uv^T, u'v'^T> = <u, u'> * <v, v'>` to compute gradient dot products without materializing full gradient matrices. For a layer with 256 inputs and 10 outputs, this stores 266 values per sample instead of 2,560.
+- **Top-K Selection**: Track only most influential training samples per test sample
 - **Tile-based Processing**: Handle large datasets in manageable chunks
+- **Learning Rate Weighting**: Each checkpoint's influence is scaled by its learning rate
 
-## Command Referencelts
+## Command Reference
 
 **Influence Score Interpretation:**
 - **Positive values**: Training sample helped correct prediction
