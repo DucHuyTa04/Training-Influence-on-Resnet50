@@ -1,0 +1,102 @@
+{
+  "v1": {
+    "version": 1,
+    "test_loss": 0.14114495731926338,
+    "test_accuracy": 0.9949824213981628,
+    "val_accuracy": 0.9815701246261597,
+    "val_loss": 0.6188591509529596,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-10T09:07:50.749720",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v1/model_v1.pth"
+  },
+  "v2": {
+    "version": 2,
+    "test_loss": 0.16111416246808677,
+    "test_accuracy": 0.9866198301315308,
+    "val_accuracy": 0.9821317195892334,
+    "val_loss": 0.5925991070040194,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-10T11:30:21.875489",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v2/model_v2.pth"
+  },
+  "v3": {
+    "version": 3,
+    "test_loss": 0.1558289951712596,
+    "test_accuracy": 0.9882923364639282,
+    "val_accuracy": 0.9827550053596497,
+    "val_loss": 0.5908609334183611,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-13T13:46:02.846794",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v3/model_v3.pth"
+  },
+  "v4": {
+    "version": 4,
+    "test_loss": 0.1517911560672704,
+    "test_accuracy": 0.9901320934295654,
+    "val_accuracy": 0.9825472235679626,
+    "val_loss": 0.5914023325122767,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-14T15:51:09.345814",
+    "model_path": "/home/duchuy/links/scratch/training_influence/Training-Influence-on-Resnet50/models/best/v4/model_v4.pth"
+  },
+  "v5": {
+    "version": 5,
+    "test_loss": 0.1524776767619698,
+    "test_accuracy": 0.9887940883636475,
+    "val_accuracy": 0.9815083742141724,
+    "val_loss": 0.592195991379492,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-14T16:29:44.131866",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v5/model_v5.pth"
+  },
+  "v6": {
+    "version": 6,
+    "test_loss": 0.15331296315583362,
+    "test_accuracy": 0.988459587097168,
+    "val_accuracy": 0.984209418296814,
+    "val_loss": 0.5897628494689104,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-14T19:12:41.273803",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v6/model_v6.pth"
+  },
+  "v7": {
+    "version": 7,
+    "test_loss": 0.15643529054995545,
+    "test_accuracy": 0.987790584564209,
+    "val_accuracy": 0.9833783507347107,
+    "val_loss": 0.5902780573431975,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-14T20:14:00.987712",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v7/model_v7.pth"
+  },
+  "v8": {
+    "version": 8,
+    "test_loss": 0.15364494593416814,
+    "test_accuracy": 0.9881250858306885,
+    "val_accuracy": 0.9823395013809204,
+    "val_loss": 0.5915177397115696,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-14T20:53:11.831832",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v8/model_v8.pth"
+  },
+  "v9": {
+    "version": 9,
+    "test_loss": 0.15199177800427713,
+    "test_accuracy": 0.9879578351974487,
+    "val_accuracy": 0.9833783507347107,
+    "val_loss": 0.5913368279983962,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-14T21:49:37.139202",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v9/model_v9.pth"
+  },
+  "v10": {
+    "version": 10,
+    "test_loss": 0.1544956418882347,
+    "test_accuracy": 0.9874560832977295,
+    "val_accuracy": 0.9814404249191284,
+    "val_loss": 0.5919050395818959,
+    "num_test_samples": 5979,
+    "timestamp": "2025-12-14T22:56:40.738734",
+    "model_path": "/scratch/duchuy/training_influence/Training-Influence-on-Resnet50/models/best/v10/model_v10.pth"
+  }
+}

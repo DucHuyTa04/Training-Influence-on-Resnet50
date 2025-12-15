@@ -12,11 +12,15 @@ This project implements **TracIn (Tracing Training Influence)**, a state-of-the-
 
 | Metric | Result |
 |--------|--------|
-| Final Model Accuracy | **98.28%** (v3) |
-| Test Samples Analyzed | 5,979 |
+| **Best Test Accuracy** | **99.50%** (v1 - cleaned dataset) |
+| **Best Test Accuracy (Uncleaned)** | **99.01%** (v4) |
+| **Data Cleaning Improvement** | **+0.49%** (v1 vs best uncleaned) |
+| **Average Test Accuracy** | **98.84%** (v2-v10) |
+| Final Validation Accuracy | 98.28% (v3) |
+| Test Samples | 5,979 |
 | Influence Scores Computed | 597,900 (top-100 per test) |
 | Influence Range | [-0.1702, +0.2729] |
-| Mispredictions Detected | 158 |
+| Mispredictions Detected | 142-172 per version |
 | Cross-Reference Matches | 2,680 |
 
 ---
@@ -677,6 +681,210 @@ sbatch config/slurm_train_full.sh
 3. **Influence Functions**: Koh, P. W., & Liang, P. (2017). "Understanding Black-box Predictions via Influence Functions." *ICML*.
 
 4. **Label Smoothing**: Müller, R., Kornblith, S., & Hinton, G. E. (2019). "When Does Label Smoothing Help?" *NeurIPS*.
+
+---
+
+## 11. Cross-Version Analysis (v2-v10)
+
+This section presents an in-depth comparative analysis of model versions 2 through 10, identifying patterns, similarities, and noteworthy findings across training runs.
+
+### 11.1 Model Performance Summary
+
+| Version | Val Acc | Val Loss | **Test Acc** | **Test Loss** | Mispredictions | Date | Notes |
+|---------|---------|----------|--------------|---------------|----------------|------|-------|
+| v1 | 98.16% | 0.6189 | **99.50%** | **0.1411** | N/A | 2025-12-10 | 🧹 Cleaned dataset |
+| v2 | 98.21% | 0.5926 | **98.66%** | **0.1611** | 169 | 2025-12-10 | |
+| v3 | 98.28% | 0.5909 | **98.83%** | **0.1558** | 158 | 2025-12-13 | |
+| v4 | 98.25% | 0.5914 | **99.01%** | **0.1518** | 150 | 2025-12-14 | |
+| v5 | 98.15% | 0.5922 | **98.88%** | **0.1525** | 158 | 2025-12-14 | |
+| v6 | 98.42% | 0.5898 | **98.85%** | **0.1533** | 155 | 2025-12-14 | |
+| v7 | 98.34% | 0.5903 | **98.78%** | **0.1564** | 150 | 2025-12-14 | |
+| v8 | 98.23% | 0.5915 | **98.81%** | **0.1536** | 172 | 2025-12-14 | |
+| v9 | 98.34% | 0.5913 | **98.80%** | **0.1520** | 165 | 2025-12-14 | |
+| v10 | 98.14% | 0.5919 | **98.75%** | **0.1545** | 142 | 2025-12-14 | |
+
+**Key Observations:**
+- **Best test accuracy**: v1 with **99.50%** - trained on **cleaned dataset** after removing suspicious/mislabeled images
+- **Best on uncleaned data (v2-v10)**: v4 with **99.01%** test accuracy
+- **Data cleaning impact**: v1 shows **~0.5% improvement** over the best uncleaned model, demonstrating the value of the influence analysis workflow
+- **Lowest test loss**: v1 with 0.1411, followed by v4 with 0.1518
+- **Validation vs Test**: Test accuracy is generally **higher** than validation accuracy across versions
+- All models achieve >98.6% test accuracy, confirming robust generalization
+
+### 11.2 Persistently Mispredicted Images (Across All Versions)
+
+These training images are consistently mispredicted across all 9 model versions (v2-v10), indicating **inherent ambiguity or potential mislabeling**:
+
+| Image | True Class | Predicted As | Versions Affected |
+|-------|-----------|--------------|-------------------|
+| `butterfly_1751.jpeg` | butterfly (0) | spider (8) | All 9 versions |
+| `cat_1035.jpeg` | cat (1) | sheep (7) | All 9 versions |
+| `cat_386.jpg` | cat (1) | squirrel/sheep (9/7) | All 9 versions |
+| `cat_552.jpeg` | cat (1) | dog (4) | All 9 versions |
+| `chicken_1080.jpeg` | chicken (2) | dog (4) | All 9 versions |
+| `chicken_1515.jpeg` | chicken (2) | dog (4) | All 9 versions |
+| `chicken_1529.jpeg` | chicken (2) | spider (8) | All 9 versions |
+| `chicken_1653.jpeg` | chicken (2) | spider (8) | All 9 versions |
+| `chicken_2165.jpeg` | chicken (2) | spider (8) | All 9 versions |
+| `chicken_2223.jpeg` | chicken (2) | squirrel (9) | All 9 versions |
+| `cow_1100.jpeg` | cow (3) | sheep (7) | All 9 versions |
+| `cow_1554.jpeg` | cow (3) | varies (2/4/9) | All 9 versions |
+| `cow_1823.jpeg` | cow (3) | horse (6) | All 9 versions |
+| `cow_327.jpeg` | cow (3) | sheep (7) | All 9 versions |
+| `cow_425.jpeg` | cow (3) | horse/dog (6/4) | All 9 versions |
+| `cow_471.jpeg` | cow (3) | horse (6) | All 9 versions |
+| `cow_496.jpeg` | cow (3) | sheep (7) | All 9 versions |
+| `cow_916.jpeg` | cow (3) | elephant (5) | All 9 versions |
+| `dog_1165.jpeg` | dog (4) | cow (3) | All 9 versions |
+| `dog_2071.jpeg` | dog (4) | cow (3) | All 9 versions |
+| `dog_2155.jpeg` | dog (4) | chicken (2) | All 9 versions |
+| `dog_3413.jpeg` | dog (4) | sheep (7) | All 9 versions |
+| `dog_3987.jpeg` | dog (4) | sheep (7) | All 9 versions |
+| `dog_4039.jpeg` | dog (4) | cow (3) | All 9 versions |
+| `dog_4121.jpeg` | dog (4) | squirrel (9) | 8 of 9 versions |
+| `dog_558.jpeg` | dog (4) | horse (6) | All 9 versions |
+| `dog_562.jpeg` | dog (4) | horse (6) | All 9 versions |
+| `elephant_199.jpeg` | elephant (5) | sheep (7) | All 9 versions |
+| `elephant_883.jpeg` | elephant (5) | horse (6) | 8 of 9 versions |
+| `horse_1299.jpeg` | horse (6) | cow (3) | All 9 versions |
+| `horse_2624.jpeg` | horse (6) | cow (3) | All 9 versions |
+| `horse_518.jpeg` | horse (6) | sheep (7) | All 9 versions |
+| `horse_758.jpeg` | horse (6) | spider (8) | All 9 versions |
+| `sheep_789.jpeg` | sheep (7) | cow (3) | All 9 versions |
+| `spider_2523.jpeg` | spider (8) | butterfly (0) | All 9 versions |
+| `spider_4288.jpeg` | spider (8) | butterfly (0) | 8 of 9 versions |
+| `squirrel_1106.jpeg` | squirrel (9) | butterfly (0) | 7 of 9 versions |
+| `squirrel_1418.jpeg` | squirrel (9) | dog (4) | 8 of 9 versions |
+| `squirrel_1434.jpeg` | squirrel (9) | elephant (5) | 8 of 9 versions |
+| `squirrel_1546.jpeg` | squirrel (9) | chicken (2) | All 9 versions |
+
+**Total persistent errors: ~40 training images are consistently problematic**
+
+### 11.3 Confusion Pattern Analysis
+
+The most common confusion pairs across all versions:
+
+| True Class | Often Confused With | Frequency | Likely Cause |
+|-----------|---------------------|-----------|--------------|
+| **cow** | sheep | Very High | Similar body structure, grazing animals |
+| **cow** | horse | High | Both are large quadrupeds |
+| **dog** | horse | High | Various dog breeds resemble horse profiles |
+| **dog** | cow | Medium | Spotted dogs confused with cows |
+| **chicken** | spider | Medium | Both have thin legs, unusual postures |
+| **chicken** | dog | Medium | Color/texture similarities |
+| **horse** | cow | High | Large body mass confusion |
+| **spider** | butterfly | Medium | Wing-like leg spread patterns |
+| **butterfly** | spider | Medium | Similar color patterns (orange/black) |
+| **squirrel** | spider/butterfly | Low | Edge cases |
+
+### 11.4 Most Influential Training Samples (Consistent Across Versions)
+
+These training samples appear in the **top-50 most influential** list across multiple versions:
+
+| Train ID | Class | Avg Appearances | Versions in Top 50 | Significance |
+|----------|-------|----------------|-------------------|--------------|
+| 8661 | dog | ~2,900 | 9/9 | **Most consistent influencer** |
+| 7654 | cow | ~2,800 | 9/9 | Highly influential for cow predictions |
+| 7902 | cow | ~2,500 | 9/9 | Key cow exemplar |
+| 22958 | squirrel | ~2,500 | 9/9 | Dominant squirrel sample |
+| 10628 | dog | ~2,300 | 9/9 | Strong dog influence |
+| 5037 | chicken | ~2,250 | 9/9 | Key chicken sample |
+| 11000 | dog | ~2,200 | 9/9 | Important dog reference |
+| 8381 | cow | ~2,400 | 8/9 | High cow influence |
+| 12964 | elephant | ~2,400 | 7/9 | Key elephant sample |
+| 15925 | horse | ~2,100 | 9/9 | Important horse reference |
+
+### 11.5 Mislabeled Sample Candidates (High Confidence)
+
+These samples appear repeatedly in the mislabeled candidates across versions, with **high influence on mispredictions**:
+
+#### Top Candidates for Review
+
+| Image | Labeled As | Predicted As | Evidence |
+|-------|-----------|--------------|----------|
+| `cat_1035.jpeg` | cat | sheep | Appears in 9/9 versions, high influence on sheep predictions |
+| `cow_496.jpeg` | cow | sheep | Consistently influences sheep mispredictions (18-22 appearances) |
+| `cow_327.jpeg` | cow | sheep | Strong sheep influence (14-23 appearances per version) |
+| `cow_1100.jpeg` | cow | sheep | Consistent across all versions |
+| `cow_1759.jpeg` | cow | sheep | High total influence scores |
+| `horse_518.jpeg` | horse | sheep | Appears in all version reports (14-23 appearances) |
+| `dog_3413.jpeg` | dog | sheep | Persistent across versions |
+| `dog_3987.jpeg` | dog | sheep | Strong sheep influence |
+| `horse_1299.jpeg` | horse | cow | Consistent cow confusion trigger |
+| `horse_612.jpeg` | horse | cow | Multiple version appearances |
+| `sheep_789.jpeg` | sheep | cow | High influence on cow predictions |
+| `dog_1165.jpeg` | dog | cow | Strong cow influence signal |
+
+### 11.6 Influence Statistics Comparison
+
+| Version | Mean Influence | Median Influence | Influence Range |
+|---------|---------------|-----------------|-----------------|
+| v2 | 5.67e-06 | 2.58e-06 | [-0.0154, 0.0256] |
+| v3 | 2.27e-04 | 5.73e-05 | [-0.1702, 0.2729] |
+| v4 | 1.53e-04 | 3.31e-05 | [-0.1994, 0.2879] |
+| v5 | 9.21e-05 | 3.06e-05 | [-0.0940, 0.1709] |
+| v6 | 9.18e-05 | 2.97e-05 | [-0.0987, 0.1794] |
+| v7 | 6.26e-05 | 2.81e-05 | [-0.1320, 0.1997] |
+| v8 | 1.41e-04 | 5.02e-05 | [-0.1255, 0.2692] |
+| v9 | 4.45e-05 | 1.41e-05 | [-0.0410, 0.0731] |
+| v10 | 4.60e-05 | 4.05e-05 | [-0.0897, 0.1435] |
+
+**Notable observation**: v3 and v4 show the highest influence magnitude ranges, suggesting more pronounced training sample effects in those models.
+
+### 11.7 Class-Specific Error Patterns
+
+#### Classes with Most Mispredictions
+
+| Class | Avg Errors/Version | Main Confusion Targets |
+|-------|-------------------|----------------------|
+| **dog** | ~22 | cat, cow, horse, sheep |
+| **cow** | ~14 | sheep, horse, chicken |
+| **chicken** | ~10 | spider, dog, squirrel |
+| **horse** | ~7 | cow, sheep |
+| **squirrel** | ~7 | butterfly, spider, dog |
+| **sheep** | ~6 | cow, chicken |
+| **spider** | ~5 | butterfly |
+| **cat** | ~4 | dog, sheep |
+| **butterfly** | ~3 | spider, chicken |
+| **elephant** | ~3 | sheep, horse |
+
+**Insight**: Dogs have the highest error rate, likely due to the tremendous variety in dog breeds causing confusion with other quadrupeds.
+
+### 11.8 Recommendations Based on Analysis
+
+#### 1. **Data Cleaning Priority List**
+The following images should be manually reviewed for potential mislabeling:
+1. `cow_496.jpeg`, `cow_327.jpeg`, `cow_1100.jpeg` (labeled cow, consistently predicted sheep)
+2. `cat_1035.jpeg` (labeled cat, consistently predicted sheep)
+3. `horse_518.jpeg`, `horse_1299.jpeg` (consistently confused)
+4. `dog_558.jpeg`, `dog_562.jpeg` (labeled dog, predicted horse)
+
+#### 2. **Class Augmentation Needs**
+- **Cow vs Sheep**: Need more distinctive training examples
+- **Dog**: Expand breed diversity to reduce confusion
+- **Chicken vs Spider**: Add more characteristic pose examples
+
+#### 3. **Model Architecture Considerations**
+- Consider attention mechanisms to focus on distinctive features
+- Fine-grained classification heads for confusing class pairs
+
+### 11.9 Summary Statistics
+
+| Metric | Value |
+|--------|-------|
+| Total versions analyzed | 9 (v2-v10) |
+| Average validation accuracy | 98.26% |
+| **Average test accuracy** | **98.84%** |
+| **Best test accuracy (cleaned data)** | **99.50% (v1)** |
+| **Best test accuracy (uncleaned)** | **99.01% (v4)** |
+| **Improvement from data cleaning** | **+0.49%** |
+| Total unique mispredicted images | ~80 |
+| Persistently mispredicted (all versions) | ~40 |
+| Top influential samples (consistent) | 10 |
+| Candidate mislabeled images | 12 |
+| Most problematic class | dog (22 avg errors) |
+| Most confused pair | cow → sheep |
+| Test set size | 5,979 samples |
 
 ---
 

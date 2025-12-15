@@ -16,10 +16,75 @@ import numpy as np
 from tqdm.auto import tqdm
 import sys
 from pathlib import Path
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 
 sys.path.insert(0, str(Path(__file__).parent / 'utils'))
 from model_architecture import ResNet50_Animals10
 from version_manager import VersionManager
+
+
+def plot_training_curves(history_head, history_finetune, save_dir, version_num):
+    """Plot training and validation curves for both stages."""
+    # Combine histories
+    head_epochs = len(history_head['val_loss'])
+    finetune_epochs = len(history_finetune['val_loss'])
+    total_epochs = head_epochs + finetune_epochs
+    
+    # Create epoch indices
+    head_epoch_indices = list(range(1, head_epochs + 1))
+    finetune_epoch_indices = list(range(head_epochs + 1, total_epochs + 1))
+    
+    # Create figure with 2 subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Plot 1: Accuracy (Training and Validation)
+    # Training accuracy - blue
+    ax1.plot(head_epoch_indices, history_head['train_acc'], 
+             'b-', linewidth=2, marker='o', markersize=2.5, alpha=0.7, label='Training (Head-Only)')
+    ax1.plot(finetune_epoch_indices, history_finetune['train_acc'], 
+             'b-', linewidth=2, marker='s', markersize=2.5, alpha=0.7, label='Training (Fine-Tuning)')
+    # Validation accuracy - orange
+    ax1.plot(head_epoch_indices, history_head['val_acc'], 
+             'orange', linewidth=2.5, marker='o', markersize=3, label='Validation (Head-Only)')
+    ax1.plot(finetune_epoch_indices, history_finetune['val_acc'], 
+             'orange', linewidth=2.5, marker='s', markersize=3, label='Validation (Fine-Tuning)')
+    ax1.axvline(x=head_epochs, color='gray', linestyle='--', linewidth=1.5, alpha=0.7, label='Stage Transition')
+    ax1.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+    ax1.set_ylabel('Accuracy', fontsize=12, fontweight='bold')
+    ax1.set_title('Training and Validation Accuracy', fontsize=14, fontweight='bold')
+    ax1.legend(loc='lower right', fontsize=9)
+    ax1.grid(True, alpha=0.3)
+    ax1.set_xlim(0, total_epochs + 1)
+    
+    # Plot 2: Loss (Training and Validation)
+    # Training loss - blue
+    ax2.plot(head_epoch_indices, history_head['train_loss'], 
+             'b-', linewidth=2, marker='o', markersize=2.5, alpha=0.7, label='Training (Head-Only)')
+    ax2.plot(finetune_epoch_indices, history_finetune['train_loss'], 
+             'b-', linewidth=2, marker='s', markersize=2.5, alpha=0.7, label='Training (Fine-Tuning)')
+    # Validation loss - orange
+    ax2.plot(head_epoch_indices, history_head['val_loss'], 
+             'orange', linewidth=2.5, marker='o', markersize=3, label='Validation (Head-Only)')
+    ax2.plot(finetune_epoch_indices, history_finetune['val_loss'], 
+             'orange', linewidth=2.5, marker='s', markersize=3, label='Validation (Fine-Tuning)')
+    ax2.axvline(x=head_epochs, color='gray', linestyle='--', linewidth=1.5, alpha=0.7, label='Stage Transition')
+    ax2.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+    ax2.set_ylabel('Loss', fontsize=12, fontweight='bold')
+    ax2.set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
+    ax2.legend(loc='upper right', fontsize=9)
+    ax2.grid(True, alpha=0.3)
+    ax2.set_xlim(0, total_epochs + 1)
+    
+    plt.suptitle(f'Training Progress - Model v{version_num}', fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    # Save figure
+    save_path = save_dir / f'training_curves_v{version_num}.png'
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"[PLOT] Training curves saved: {save_path}")
+    plt.close()
 
 
 def train_epoch(model, dataloader, criterion, optimizer, scaler, device, is_training=True):
@@ -266,7 +331,7 @@ def main():
     optimizer_head = optim.AdamW(head_params, lr=1e-3, weight_decay=1e-4)
     scheduler_head = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer_head, T_0=5, T_mult=1)
     
-    model, _, _, _ = train_model(
+    model, history_head, _, _ = train_model(
         model, dataloaders, dataset_sizes, criterion, optimizer_head, scheduler_head,
         device, args.head_epochs, 999, version_dirs['checkpoints'], 
         args.checkpoint_freq, 'head_only', version_num
@@ -288,14 +353,17 @@ def main():
     ], weight_decay=1e-4)
     
     scheduler_ft = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer_ft, mode='min', factor=0.5, patience=5, min_lr=1e-7
+        optimizer_ft, mode='min', factor=0.5, patience=3, min_lr=1e-7
     )
     
-    model, history, best_val_acc, best_val_loss = train_model(
+    model, history_finetune, best_val_acc, best_val_loss = train_model(
         model, dataloaders, dataset_sizes, criterion, optimizer_ft, scheduler_ft,
         device, args.num_epochs, args.early_stopping_patience, 
         version_dirs['checkpoints'], args.checkpoint_freq, 'finetune', version_num
     )
+    
+    # Plot training curves combining both stages
+    plot_training_curves(history_head, history_finetune, version_dirs['model'], version_num)
     
     model_path = version_dirs['model'] / f'model_v{version_num}.pth'
     torch.save(model.state_dict(), model_path)
