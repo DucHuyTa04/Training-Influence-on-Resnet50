@@ -544,6 +544,42 @@ test_idx,test_true,test_pred,train_idx,train_true,train_pred,influence,rank,same
 2. Assessing the impact of data cleaning (v1 cleaned vs v2-v10 uncleaned)
 3. Reporting final model performance
 
+### 7.7 Cross-Version Analysis (`9_cross_version_analysis.py`)
+
+**Purpose**: Generate comprehensive comparative analysis across multiple model versions to identify persistent patterns and back up Section 11 findings.
+
+**Features**:
+- **Persistent Mispredictions**: Find images mispredicted across multiple versions
+- **Consistent Influential Samples**: Identify training samples that appear in top influences across multiple versions
+- **Influence Statistics**: Compute mean, median, std, and negative percentage across versions
+- **Confusion Patterns**: Aggregate class confusion matrices across all versions
+- **Class Error Rates**: Per-class error analysis with statistics
+- **Comprehensive Dashboard**: Multi-panel visualization with 7 analysis plots
+
+**Outputs**:
+- `persistent_mispredictions.csv` - Images consistently mispredicted (Section 11.2)
+- `influential_samples.csv` - Training samples with consistent high influence (Section 11.4)
+- `influence_statistics.csv` - Influence score distributions per version (Section 11.6)
+- `confusion_patterns.csv` - Class confusion pairs aggregated across versions
+- `class_error_rates.csv` - Per-class error statistics
+- `cross_version_dashboard.png` - Comprehensive 7-panel visualization dashboard
+- `summary_report.txt` - Text-based summary of key findings
+
+**Usage**:
+```bash
+# Analyze all versions, Ex: v2-v10
+python scripts/9_cross_version_analysis.py --versions 2-10
+
+# Analyze specific versions
+python scripts/9_cross_version_analysis.py --versions 2,3,5,7 --output_dir outputs/custom_analysis
+```
+
+**Why Cross-Version Analysis?**: Understanding patterns across multiple training runs reveals:
+1. **Inherently difficult samples** - images that no model version can classify correctly
+2. **Universally influential samples** - prototypical training examples that consistently affect predictions
+3. **Systematic biases** - class confusion patterns that persist despite re-training
+4. **Data quality issues** - samples that consistently harm model performance across versions
+
 ---
 
 ## 8. Results and Findings
@@ -642,6 +678,7 @@ python scripts/5b_cross_reference_analysis.py
 python scripts/6_inspect_mislabeled.py 
 python scripts/7_inspect_influential.py
 python scripts/8_evaluate_test_set.py
+python scripts/9_cross_version_analysis.py     # Cross-version comparative analysis
 ```
 
 ### 9.4 HPC Execution
@@ -670,13 +707,6 @@ sbatch config/slurm_train_full.sh
 3. **Some samples are universally influential**: Top training sample appears in 54% of test influences
 4. **Memory optimization is essential**: Without Ghost Dot-Product, computation would be impractical
 
-### 10.3 Future Work
-
-1. **Influence-guided data cleaning**: Automatically remove or relabel detected mislabels
-2. **Active learning**: Use influence scores to select most valuable samples for labeling
-3. **Model comparison**: Compare influence patterns across different architectures
-4. **Temporal analysis**: Track how influence evolves during training
-
 ---
 
 ## 11. Cross-Version Analysis (v2-v10)
@@ -687,7 +717,7 @@ This section presents an in-depth comparative analysis of model versions 2 throu
 
 | Version | Val Acc | Val Loss | **Test Acc** | **Test Loss** | Mispredictions | Date | Notes |
 |---------|---------|----------|--------------|---------------|----------------|------|-------|
-| v1 | 98.16% | 0.6189 | **99.50%** | **0.1411** | N/A | 2025-12-10 | 🧹 Cleaned dataset |
+| v1 | 98.16% | 0.6189 | **99.50%** | **0.1411** | N/A | 2025-12-10 | Cleaned dataset |
 | v2 | 98.21% | 0.5926 | **98.66%** | **0.1611** | 169 | 2025-12-10 | |
 | v3 | 98.28% | 0.5909 | **98.83%** | **0.1558** | 158 | 2025-12-13 | |
 | v4 | 98.25% | 0.5914 | **99.01%** | **0.1518** | 150 | 2025-12-14 | |
@@ -908,6 +938,7 @@ The following images should be manually reviewed for potential mislabeling:
 | `scripts/6_inspect_mislabeled.py` | Mislabel detection |
 | `scripts/7_inspect_influential.py` | Influential sample analysis |
 | `scripts/8_evaluate_test_set.py` | Test set evaluation (final accuracy/loss metrics) |
+| `scripts/9_cross_version_analysis.py` | Cross-version comparative analysis (v2-v10) |
 | `scripts/run_full_pipeline.py` | End-to-end pipeline |
 | `scripts/utils/model_architecture.py` | ResNet50 model definition |
 | `scripts/utils/influence_utils.py` | TracIn computation utilities |

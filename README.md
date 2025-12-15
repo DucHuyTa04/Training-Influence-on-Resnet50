@@ -29,6 +29,7 @@ Training-Influence-on-Resnet50/
 │   ├── 6_inspect_mislabeled.py      # Generate visual inspection grid for mislabeled candidates
 │   ├── 7_inspect_influential.py     # Find and visualize most helpful/harmful training images
 │   ├── 8_evaluate_test_set.py       # Evaluate trained models on test set (get final test accuracy/loss)
+│   ├── 9_cross_version_analysis.py  # Cross-version analysis with comparative dashboards
 │   ├── run_full_pipeline.py         # Run complete analysis pipeline (steps 3-7)
 │   └── utils/                       # Shared utilities
 │       ├── model_architecture.py    # ResNet50 model definition
@@ -179,6 +180,13 @@ python scripts/8_evaluate_test_set.py \
   --version 1                        # Specific version (omit to evaluate all versions)
   # OR
 python scripts/8_evaluate_test_set.py  # Evaluate all trained models
+
+# Step 9: Cross-version analysis
+python scripts/9_cross_version_analysis.py \
+  --versions 2-10 \                  # Version range to analyze
+  --output_dir outputs/cross_version_analysis  # Output directory
+  # OR
+python scripts/9_cross_version_analysis.py --versions 2,3,5,7  # Specific versions
 ```
 
 ### Quick Pipeline (Recommended)
