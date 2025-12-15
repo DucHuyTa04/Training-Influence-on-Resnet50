@@ -711,7 +711,10 @@ sbatch config/slurm_train_full.sh
 
 ## 11. Cross-Version Analysis (v2-v10)
 
-This section presents an in-depth comparative analysis of model versions 2 through 10, identifying patterns, similarities, and noteworthy findings across training runs.
+> **Visualization**: `outputs/cross_version_analysis/cross_version_dashboard.png` - 7-panel comprehensive dashboard  
+> **Summary**: `outputs/cross_version_analysis/summary_report.txt` - Text-based analysis summary
+
+This section presents an in-depth comparative analysis of model versions 2 through 10, identifying patterns, similarities, and noteworthy findings across training runs. All findings are backed by quantitative data in the CSV files referenced in each subsection.
 
 ### 11.1 Model Performance Summary
 
@@ -737,6 +740,8 @@ This section presents an in-depth comparative analysis of model versions 2 throu
 - All models achieve >98.6% test accuracy, confirming robust generalization
 
 ### 11.2 Persistently Mispredicted Images (Across All Versions)
+
+> **Data File**: `outputs/cross_version_analysis/persistent_mispredictions.csv`
 
 These training images are consistently mispredicted across all 9 model versions (v2-v10), indicating **inherent ambiguity or potential mislabeling**:
 
@@ -787,6 +792,8 @@ These training images are consistently mispredicted across all 9 model versions 
 
 ### 11.3 Confusion Pattern Analysis
 
+> **Data File**: `outputs/cross_version_analysis/confusion_patterns.csv`
+
 The most common confusion pairs across all versions:
 
 | True Class | Often Confused With | Frequency | Likely Cause |
@@ -804,6 +811,8 @@ The most common confusion pairs across all versions:
 
 ### 11.4 Most Frequently Appearing Influential Training Samples (Consistent Across Versions)
 
+> **Data File**: `outputs/cross_version_analysis/influential_samples.csv`
+
 These training samples appear most frequently in the **top-100 influences** across multiple versions (based on appearance count, not necessarily helpful or harmful):
 
 | Train ID | Class | Avg Appearances | Versions in Top 50 | Significance |
@@ -820,6 +829,8 @@ These training samples appear most frequently in the **top-100 influences** acro
 | 15925 | horse | ~2,100 | 9/9 | Important horse reference |
 
 ### 11.5 Mislabeled Sample Candidates (High Confidence)
+
+> **Note**: These candidates are derived from cross-referencing `persistent_mispredictions.csv` with individual version mislabeling reports.
 
 These samples appear repeatedly in the mislabeled candidates across versions, with **high influence on mispredictions**:
 
@@ -842,6 +853,8 @@ These samples appear repeatedly in the mislabeled candidates across versions, wi
 
 ### 11.6 Influence Statistics Comparison
 
+> **Data File**: `outputs/cross_version_analysis/influence_statistics.csv`
+
 | Version | Mean Influence | Median Influence | Influence Range |
 |---------|---------------|-----------------|-----------------|
 | v2 | 5.67e-06 | 2.58e-06 | [-0.0154, 0.0256] |
@@ -857,6 +870,8 @@ These samples appear repeatedly in the mislabeled candidates across versions, wi
 **Notable observation**: v3 and v4 show the highest influence magnitude ranges, suggesting more pronounced training sample effects in those models.
 
 ### 11.7 Class-Specific Error Patterns
+
+> **Data File**: `outputs/cross_version_analysis/class_error_rates.csv`
 
 #### Classes with Most Mispredictions
 

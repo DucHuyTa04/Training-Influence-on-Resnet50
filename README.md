@@ -57,6 +57,14 @@ Training-Influence-on-Resnet50/
 │   └── version_registry.json        # Version tracking metadata
 │
 ├── outputs/                         # All generated outputs (organized by version)
+│   ├── cross_version_analysis/      # Cross-version comparative analysis (v2-v10)
+│   │   ├── persistent_mispredictions.csv    # Images mispredicted across ≥7 versions
+│   │   ├── influential_samples.csv          # Consistently influential training samples
+│   │   ├── influence_statistics.csv         # Influence score distributions per version
+│   │   ├── confusion_patterns.csv           # Class confusion pairs aggregated
+│   │   ├── class_error_rates.csv            # Per-class error statistics
+│   │   ├── cross_version_dashboard.png      # 7-panel visualization dashboard
+│   │   └── summary_report.txt               # Text-based summary of findings
 │   ├── v1/
 │   │   ├── mispredictions/              # Misprediction detection results
 │   │   │   ├── false_predictions.csv    # List of all mispredictions
