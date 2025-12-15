@@ -37,7 +37,8 @@ This project implements **TracIn (Tracing Training Influence)**, a state-of-the-
 8. [Results and Findings](#8-results-and-findings)
 9. [Reproducibility and Version Control](#9-reproducibility-and-version-control)
 10. [Conclusions](#10-conclusions)
-11. [References](#11-references)
+11. [Cross-Version Analysis (v2-v10)](#11-cross-version-analysis-v2-v10)
+12. [References](#12-references)
 
 ---
 
@@ -316,11 +317,7 @@ Each checkpoint stores:
 
 ### 5.6 Training Results
 
-| Version | Val Accuracy |
-|---------|-------------|
-| v1 | 98.16% |
-| v2 | 98.21% |
-| v3 | **98.28%** |
+See **Section 11.1** for comprehensive performance metrics across all 10 versions, including validation and test accuracy.
 
 ---
 
@@ -521,49 +518,28 @@ test_idx,test_true,test_pred,train_idx,train_true,train_pred,influence,rank,same
 
 ## 8. Results and Findings
 
-### 8.1 Model Performance
+> **Note:** For comprehensive cross-version results including test accuracy metrics, see **Section 11**.
+
+### 8.1 Summary Metrics
 
 | Metric | Value |
 |--------|-------|
-| Final Accuracy (v3) | **98.28%** |
-| Test Samples | 5,979 |
-| Mispredictions | 158 (2.64% error rate) |
+| Model versions trained | 10 (v1-v10) |
+| Best test accuracy | **99.50%** (v1, cleaned data) |
+| Best test accuracy (uncleaned) | **99.01%** (v4) |
+| Average test accuracy (v2-v10) | **98.84%** |
+| Test samples | 5,979 |
+| Data cleaning improvement | +0.49% |
 
-### 8.2 Influence Statistics (v3)
+### 8.2 Key Findings
 
-| Statistic | Value |
-|-----------|-------|
-| Total Scores Computed | 597,900 (top-100 × 5,979 test) |
-| Influence Range | [-0.1702, +0.2729] |
-| Mean Influence | 2.27e-04 |
-| Std Influence | 0.0156 |
+1. **TracIn successfully identifies mislabeled samples**: 31.6% of influential training samples for mispredictions show the same error pattern, indicating likely mislabels.
 
-### 8.3 Top Influential Training Samples
+2. **Persistent mispredictions**: ~40 images are consistently mispredicted across all 9 model versions (v2-v10), indicating inherent ambiguity or mislabeling.
 
-| Rank | Train Index | Class | Appearances | Avg Influence |
-|------|-------------|-------|-------------|---------------|
-| 1 | 7654 | cow | 3,237 | +0.0089 |
-| 2 | 12891 | horse | 2,456 | +0.0076 |
-| 3 | 5032 | dog | 1,892 | -0.0034 |
+3. **Universally influential samples**: Some training samples appear in >50% of test influence computations, suggesting they are prototypical class exemplars.
 
-**Interpretation**: Training sample 7654 (a cow image) appears in the top-100 influences of 3,237 test samples (54% of all test samples!). This suggests it's a highly representative or "prototypical" cow image.
-
-### 8.4 Misprediction Cross-Analysis
-
-| Metric | Value |
-|--------|-------|
-| Cross-Reference Matches | 2,680 |
-| Same-Error Patterns | 847 (31.6%) |
-| Unique Training Samples Implicated | 1,234 |
-
-**Key Finding**: 31.6% of influential training samples for mispredictions show the same error pattern (e.g., both predict "chicken" when ground truth differs). These are strong candidates for mislabeling investigation.
-
-### 8.5 Class Confusion Patterns
-
-The most common confusion pairs:
-1. **Chicken ↔ Butterfly**: Visual similarity in pose/coloring
-2. **Cat ↔ Dog**: Expected similarity
-3. **Horse ↔ Cow**: Quadruped confusion
+4. **Class confusion patterns**: Cow↔sheep (most common), dog↔horse, and chicken↔spider are the primary confusion pairs.
 
 ---
 
@@ -669,18 +645,6 @@ sbatch config/slurm_train_full.sh
 2. **Active learning**: Use influence scores to select most valuable samples for labeling
 3. **Model comparison**: Compare influence patterns across different architectures
 4. **Temporal analysis**: Track how influence evolves during training
-
----
-
-## 11. References
-
-1. **TracIn**: Pruthi, G., Liu, F., Kale, S., & Sundararajan, M. (2020). "Estimating Training Data Influence by Tracing Gradient Descent." *Advances in Neural Information Processing Systems*, 33.
-
-2. **ResNet**: He, K., Zhang, X., Ren, S., & Sun, J. (2016). "Deep Residual Learning for Image Recognition." *CVPR*.
-
-3. **Influence Functions**: Koh, P. W., & Liang, P. (2017). "Understanding Black-box Predictions via Influence Functions." *ICML*.
-
-4. **Label Smoothing**: Müller, R., Kornblith, S., & Hinton, G. E. (2019). "When Does Label Smoothing Help?" *NeurIPS*.
 
 ---
 
@@ -885,6 +849,18 @@ The following images should be manually reviewed for potential mislabeling:
 | Most problematic class | dog (22 avg errors) |
 | Most confused pair | cow → sheep |
 | Test set size | 5,979 samples |
+
+---
+
+## 12. References
+
+1. **TracIn**: Pruthi, G., Liu, F., Kale, S., & Sundararajan, M. (2020). "Estimating Training Data Influence by Tracing Gradient Descent." *Advances in Neural Information Processing Systems*, 33.
+
+2. **ResNet**: He, K., Zhang, X., Ren, S., & Sun, J. (2016). "Deep Residual Learning for Image Recognition." *CVPR*.
+
+3. **Influence Functions**: Koh, P. W., & Liang, P. (2017). "Understanding Black-box Predictions via Influence Functions." *ICML*.
+
+4. **Label Smoothing**: Müller, R., Kornblith, S., & Hinton, G. E. (2019). "When Does Label Smoothing Help?" *NeurIPS*.
 
 ---
 
