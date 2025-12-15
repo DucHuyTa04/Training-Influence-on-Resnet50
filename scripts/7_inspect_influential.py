@@ -79,14 +79,14 @@ class TopInfluenceInspector:
         return pd.DataFrame(train_stats)
     
     def get_top_helpful(self, n=20):
-        """Get most helpful training images (highest positive influence)."""
+        """Get most helpful training images (highest average positive influence)."""
         stats_df = self.analyze_global_influences()
-        return stats_df.nlargest(n, 'max_influence')
+        return stats_df.nlargest(n, 'mean_influence')
     
     def get_top_harmful(self, n=20):
-        """Get least helpful training images (lowest influence)."""
+        """Get most harmful training images (lowest average influence - net negative impact)."""
         stats_df = self.analyze_global_influences()
-        return stats_df.nsmallest(n, 'min_influence')
+        return stats_df.nsmallest(n, 'mean_influence')
     
     def visualize_influences(self, df, title, save_path, metric='max_influence'):
         """Visualize top influential images."""
@@ -194,16 +194,16 @@ def main():
     
     inspector.visualize_influences(
         helpful_df,
-        f'Top {args.top_n} Most Helpful Training Images\n(Highest Positive Influence)',
+        f'Top {args.top_n} Most Helpful Training Images\n(Highest Average Influence)',
         helpful_path,
-        metric='max_influence'
+        metric='mean_influence'
     )
     
     inspector.visualize_influences(
         harmful_df,
-        f'Top {args.top_n} Least Influential Training Images\n(Lowest Influence)',
+        f'Top {args.top_n} Most Harmful Training Images\n(Lowest Average Influence - Net Negative Impact)',
         harmful_path,
-        metric='min_influence'
+        metric='mean_influence'
     )
     
     print(f"[DONE] Saved to {Path(helpful_path).parent}/")

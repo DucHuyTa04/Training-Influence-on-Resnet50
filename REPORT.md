@@ -17,8 +17,8 @@ This project implements **TracIn (Tracing Training Influence)**, a state-of-the-
 | **Data Cleaning Improvement** | **+0.49%** (v1 vs best uncleaned) |
 | **Average Test Accuracy** | **98.84%** (v2-v10) |
 | Final Validation Accuracy | 98.28% (v3) |
-| Test Samples | 5,979 |
-| Influence Scores Computed | 597,900 (top-100 per test) |
+| Test Samples | 5,224 |
+| Influence Scores Computed | 522,400 (top-100 per test) |
 | Influence Range | [-0.1702, +0.2729] |
 | Mispredictions Detected | 142-172 per version |
 | Cross-Reference Matches | 2,680 |
@@ -70,8 +70,8 @@ I implement TracIn (Pruthi et al., 2020), which estimates influence through grad
 | Property | Value |
 |----------|-------|
 | Classes | 10 (butterfly, cat, chicken, cow, dog, elephant, horse, sheep, spider, squirrel) |
-| Training Samples | ~26,000 |
-| Test Samples | ~6,000 |
+| Training Samples | ~20,800 |
+| Test Samples | ~5,200 |
 | Image Size | 224×224 (resized for ResNet) |
 | Split | 80% train / 20% test |
 
@@ -126,7 +126,7 @@ $$\nabla_W \mathcal{L} = \text{error}^\top \cdot \text{activation} \in \mathbb{R
 
 For the final layer: $d_{out} = 10$, $d_{in} = 256$
 - Full gradient size: $10 \times 256 = 2,560$ values per sample
-- For 26,000 training samples: **66.5 million values per checkpoint**
+- For 20,800 training samples: **53,2 million values per checkpoint**
 
 ### 3.2 The Ghost Dot-Product Insight
 
@@ -146,10 +146,10 @@ Instead of storing full gradients, I store factor components:
 - **Activation**: $a \in \mathbb{R}^{256}$ (input dimension)
 - **Storage per sample**: $10 + 256 = 266$ values
 
-| Approach | Storage per Sample | Total (26k samples) |
+| Approach | Storage per Sample | Total (20,8k samples) |
 |----------|-------------------|---------------------|
-| Full Gradient | 2,560 values | 66.5M values |
-| Ghost Factors | 266 values | 6.9M values |
+| Full Gradient | 2,560 values | 53.2M values |
+| Ghost Factors | 266 values | 5.5M values |
 | **Reduction** | **9.6×** | **9.6×** |
 
 ### 3.4 Implementation
@@ -263,7 +263,7 @@ I employ a **two-stage training approach** to maximize transfer learning effecti
 | Max Epochs | 100 | Allow full convergence |
 | Backbone LR | 1e-5 | Gentle updates to pretrained features |
 | Head LR | 2e-4 | Faster learning for task-specific layers |
-| Early Stopping | 10 epochs | Prevent overfitting |
+| Early Stopping | 15 epochs | Prevent overfitting |
 
 ### 5.2 Why Two Stages?
 
@@ -391,7 +391,7 @@ def collect_factors(model, dataloader, criterion, hook):
 ### 6.4 Tile-and-Stitch Strategy
 
 Computing all pairwise influences at once would require:
-- Memory: $6,000 \times 26,000 \times 4$ bytes = **624 MB** per checkpoint
+- Memory: $5,200 \times 20,800 \times 4$ bytes = **432.7 MB** per checkpoint
 
 I use a memory-efficient tile-and-stitch approach:
 
@@ -510,9 +510,39 @@ test_idx,test_true,test_pred,train_idx,train_true,train_pred,influence,rank,same
 **Purpose**: Detailed examination of most helpful and harmful training samples.
 
 **Analysis**:
-- **Most Helpful**: Training samples with highest positive influence
-- **Most Harmful**: Training samples with highest negative influence
+- **Most Helpful**: Training samples with highest **average influence** across all test samples they affect (consistently positive impact)
+- **Most Harmful**: Training samples with lowest **average influence** (net negative impact - consistently harmful)
 - **Cross-class patterns**: Which training classes influence which test classes
+
+**Methodology**: Rather than selecting based on single extreme values (max/min), this analysis uses **mean influence** to identify samples with consistent positive or negative impact across multiple test predictions.
+
+### 7.6 Test Set Evaluation (`8_evaluate_test_set.py`)
+
+**Purpose**: Evaluate trained models on the hold-out test set to obtain final performance metrics.
+
+**Features**:
+- Evaluates single version or all versions automatically
+- Uses unweighted CrossEntropyLoss for fair comparison
+- Updates version registry with test metrics
+- Generates comprehensive summary across all model versions
+
+**Output** (`test_evaluation_results.json`):
+```json
+{
+  "v1": {
+    "version": 1,
+    "test_accuracy": 0.9950,
+    "test_loss": 0.1411,
+    "val_accuracy": 0.9816,
+    "num_test_samples": 5224
+  }
+}
+```
+
+**Why Separate Evaluation?**: During training, only validation accuracy is monitored. This script provides true generalization performance on the untouched test set, which is critical for:
+1. Comparing model versions fairly
+2. Assessing the impact of data cleaning (v1 cleaned vs v2-v10 uncleaned)
+3. Reporting final model performance
 
 ---
 
@@ -528,7 +558,7 @@ test_idx,test_true,test_pred,train_idx,train_true,train_pred,influence,rank,same
 | Best test accuracy | **99.50%** (v1, cleaned data) |
 | Best test accuracy (uncleaned) | **99.01%** (v4) |
 | Average test accuracy (v2-v10) | **98.84%** |
-| Test samples | 5,979 |
+| Test samples | 5,224 |
 | Data cleaning improvement | +0.49% |
 
 ### 8.2 Key Findings
@@ -611,6 +641,7 @@ python scripts/5a_generate_dashboards.py
 python scripts/5b_cross_reference_analysis.py 
 python scripts/6_inspect_mislabeled.py 
 python scripts/7_inspect_influential.py
+python scripts/8_evaluate_test_set.py
 ```
 
 ### 9.4 HPC Execution
@@ -741,9 +772,9 @@ The most common confusion pairs across all versions:
 | **butterfly** | spider | Medium | Similar color patterns (orange/black) |
 | **squirrel** | spider/butterfly | Low | Edge cases |
 
-### 11.4 Most Influential Training Samples (Consistent Across Versions)
+### 11.4 Most Frequently Appearing Influential Training Samples (Consistent Across Versions)
 
-These training samples appear in the **top-50 most influential** list across multiple versions:
+These training samples appear most frequently in the **top-100 influences** across multiple versions (based on appearance count, not necessarily helpful or harmful):
 
 | Train ID | Class | Avg Appearances | Versions in Top 50 | Significance |
 |----------|-------|----------------|-------------------|--------------|
@@ -876,6 +907,7 @@ The following images should be manually reviewed for potential mislabeling:
 | `scripts/5b_cross_reference_analysis.py` | Error-influence cross-reference |
 | `scripts/6_inspect_mislabeled.py` | Mislabel detection |
 | `scripts/7_inspect_influential.py` | Influential sample analysis |
+| `scripts/8_evaluate_test_set.py` | Test set evaluation (final accuracy/loss metrics) |
 | `scripts/run_full_pipeline.py` | End-to-end pipeline |
 | `scripts/utils/model_architecture.py` | ResNet50 model definition |
 | `scripts/utils/influence_utils.py` | TracIn computation utilities |

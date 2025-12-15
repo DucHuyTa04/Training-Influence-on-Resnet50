@@ -28,6 +28,7 @@ Training-Influence-on-Resnet50/
 │   ├── 5b_cross_reference_analysis.py # Cross-reference mispredictions with influences
 │   ├── 6_inspect_mislabeled.py      # Generate visual inspection grid for mislabeled candidates
 │   ├── 7_inspect_influential.py     # Find and visualize most helpful/harmful training images
+│   ├── 8_evaluate_test_set.py       # Evaluate trained models on test set (get final test accuracy/loss)
 │   ├── run_full_pipeline.py         # Run complete analysis pipeline (steps 3-7)
 │   └── utils/                       # Shared utilities
 │       ├── model_architecture.py    # ResNet50 model definition
@@ -172,6 +173,12 @@ python scripts/7_inspect_influential.py \
   --top_n 20 \                                       # Number of top images to show
   --output_helpful outputs/inspection/top_helpful_images.png \  # Output for helpful images
   --output_harmful outputs/inspection/top_harmful_images.png    # Output for harmful images
+
+# Step 8: Evaluate model(s) on test set
+python scripts/8_evaluate_test_set.py \
+  --version 1                        # Specific version (omit to evaluate all versions)
+  # OR
+python scripts/8_evaluate_test_set.py  # Evaluate all trained models
 ```
 
 ### Quick Pipeline (Recommended)
